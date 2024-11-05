@@ -1,6 +1,9 @@
 import crypto from 'node:crypto'
+import { get } from 'node:http'
+import { url } from 'node:inspector'
+import { hostname } from 'node:os'
 import { createRequestHandler } from '@remix-run/express'
-import { type ServerBuild } from '@remix-run/node'
+import { redirect, type ServerBuild } from '@remix-run/node'
 import Sentry from '@sentry/remix'
 import { ip as ipAddress } from 'address'
 import chalk from 'chalk'
@@ -219,6 +222,18 @@ if (!ALLOW_INDEXING) {
 		next()
 	})
 }
+
+app.get('*', (req, res, next) => {
+	if (req.hostname.includes('fly.dev')) {
+		if (req.url === '/robots.txt') {
+			next()
+			return
+		}
+		const newUrl = `https://music.zwhitchcox.dev${req.url}`
+		return res.redirect(301, newUrl)
+	}
+	next()
+})
 
 app.all(
 	'*',
