@@ -1,6 +1,9 @@
-// app/routes/index.tsx
-
+import { type MetaFunction } from '@remix-run/node'
 import { useEffect, useState } from 'react'
+
+export const meta: MetaFunction = () => {
+	return [{ title: 'ABC' }]
+}
 
 export default function Index() {
 	const [currentLetter, setCurrentLetter] = useState<string>('')
