@@ -1,5 +1,3 @@
-// app/routes/index.tsx
-
 import { useEffect, useState, useCallback } from 'react'
 import { Button } from '#app/components/ui/button'
 import {
@@ -21,6 +19,12 @@ const consonants = allLetters.filter((letter) => !vowels.includes(letter))
 // Define wide characters that need a smaller font size
 const wideCharacters = ['W', 'M', 'w', 'm']
 
+const playAudioForLetter = (letter: string) => {
+	// Convert letter to lowercase to match file naming convention
+	const audio = new Audio(`/letters/${letter.toLowerCase()}.wav`)
+	void audio.play()
+}
+
 export default function Index() {
 	// Initialize state
 	const [enabledCharacters, setEnabledCharacters] = useState<{
@@ -29,12 +33,14 @@ export default function Index() {
 	const [currentCharacter, setCurrentCharacter] = useState<string>('')
 	const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
 	const [isUpperCase, setIsUpperCase] = useState<boolean>(false)
+	const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(false)
 
 	// Load settings from localStorage on client-side
 	useEffect(() => {
 		if (typeof window !== 'undefined') {
 			const savedEnabledCharacters = localStorage.getItem('enabledCharacters')
 			const savedCase = localStorage.getItem('isUpperCase')
+			const savedSound = localStorage.getItem('isSoundEnabled')
 
 			if (savedEnabledCharacters) {
 				// Cast the parsed JSON to the expected type
@@ -57,6 +63,10 @@ export default function Index() {
 			if (savedCase) {
 				setIsUpperCase(JSON.parse(savedCase ?? 'false') as boolean)
 			}
+
+			if (savedSound) {
+				setIsSoundEnabled(JSON.parse(savedSound ?? 'false') as boolean)
+			}
 		}
 	}, [])
 
@@ -76,6 +86,12 @@ export default function Index() {
 		}
 	}, [isUpperCase])
 
+	useEffect(() => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('isSoundEnabled', JSON.stringify(isSoundEnabled))
+		}
+	}, [isSoundEnabled])
+
 	// Function to get enabled characters
 	const getEnabledCharacters = useCallback(() => {
 		if (!enabledCharacters) return []
@@ -94,7 +110,10 @@ export default function Index() {
 			randomChar = randomChar.toLowerCase()
 		}
 		setCurrentCharacter(randomChar)
-	}, [getEnabledCharacters, isModalOpen, isUpperCase])
+		if (isSoundEnabled) {
+			playAudioForLetter(randomChar)
+		}
+	}, [getEnabledCharacters, isModalOpen, isUpperCase, isSoundEnabled])
 
 	const handleKeyDown = useCallback(
 		(event: KeyboardEvent) => {
@@ -114,10 +133,19 @@ export default function Index() {
 						key = key.toLowerCase()
 					}
 					setCurrentCharacter(key)
+					if (isSoundEnabled) {
+						playAudioForLetter(key)
+					}
 				}
 			}
 		},
-		[showRandomCharacter, enabledCharacters, isModalOpen, isUpperCase],
+		[
+			showRandomCharacter,
+			enabledCharacters,
+			isModalOpen,
+			isUpperCase,
+			isSoundEnabled,
+		],
 	)
 
 	useEffect(() => {
@@ -173,6 +201,8 @@ export default function Index() {
 								setEnabledCharacters={setEnabledCharacters}
 								isUpperCase={isUpperCase}
 								setIsUpperCase={setIsUpperCase}
+								isSoundEnabled={isSoundEnabled}
+								setIsSoundEnabled={setIsSoundEnabled}
 							/>
 						</CardContent>
 					</Card>
@@ -206,6 +236,8 @@ function OptionsComponent({
 	setEnabledCharacters,
 	isUpperCase,
 	setIsUpperCase,
+	isSoundEnabled,
+	setIsSoundEnabled,
 }: {
 	enabledCharacters: { [key: string]: boolean }
 	setEnabledCharacters: React.Dispatch<
@@ -213,6 +245,8 @@ function OptionsComponent({
 	>
 	isUpperCase: boolean
 	setIsUpperCase: React.Dispatch<React.SetStateAction<boolean>>
+	isSoundEnabled: boolean
+	setIsSoundEnabled: React.Dispatch<React.SetStateAction<boolean>>
 }) {
 	const selectAllCharacters = useCallback(() => {
 		const updatedCharacters: { [key: string]: boolean } = {}
@@ -296,13 +330,20 @@ function OptionsComponent({
 	return (
 		<div className="min-w-[300px]">
 			{/* Case Toggle */}
-			<div className="mb-4">
+			<div className="mb-4 space-y-2">
 				<label className="flex items-center space-x-2">
 					<Checkbox
 						checked={isUpperCase}
 						onCheckedChange={() => setIsUpperCase((prev) => !prev)}
 					/>
 					<span>Uppercase Output</span>
+				</label>
+				<label className="flex items-center space-x-2">
+					<Checkbox
+						checked={isSoundEnabled}
+						onCheckedChange={() => setIsSoundEnabled((prev) => !prev)}
+					/>
+					<span>Enable Sound</span>
 				</label>
 			</div>
 
