@@ -8,7 +8,6 @@ import {
 } from '#app/components/ui/card'
 import { Checkbox } from '#app/components/ui/checkbox'
 
-// Define all characters (letters and numbers) outside the component
 const allLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 const allNumbers = '0123456789'.split('')
 const allCharacters = [...allLetters, ...allNumbers]
@@ -16,17 +15,43 @@ const allCharacters = [...allLetters, ...allNumbers]
 const vowels = ['A', 'E', 'I', 'O', 'U']
 const consonants = allLetters.filter((letter) => !vowels.includes(letter))
 
-// Define wide characters that need a smaller font size
 const wideCharacters = ['W', 'M', 'w', 'm']
 
+const letterWords: Record<string, string[]> = {
+	A: ['hey', 'ay', 'eh'],
+	B: ['bee', 'beat', 'be'],
+	C: ['see', 'sea'],
+	D: ['dee'],
+	E: ['eat'],
+	F: ['ef'],
+	G: ['gee'],
+	H: ['age', 'ache'],
+	I: ['eye', 'aye', 'hi'],
+	J: ['jay'],
+	K: ['kay'],
+	L: ['el'],
+	M: ['em', 'in'],
+	N: ['en', 'in'],
+	O: ['oh', 'owe'],
+	P: ['pea', 'pee'],
+	Q: ['queue', 'cute'],
+	R: ['are', 'our'],
+	S: ['es'],
+	T: ['tea', 'tee'],
+	U: ['you'],
+	V: ['vee'],
+	W: ['double you', 'tell you'],
+	X: ['ex'],
+	Y: ['why'],
+	Z: ['zee', 'zed'],
+}
+
 const playAudioForLetter = (letter: string) => {
-	// Convert letter to lowercase to match file naming convention
 	const audio = new Audio(`/letters/${letter.toLowerCase()}.wav`)
 	void audio.play()
 }
 
 export default function Index() {
-	// Initialize state
 	const [enabledCharacters, setEnabledCharacters] = useState<{
 		[key: string]: boolean
 	} | null>(null)
@@ -34,22 +59,97 @@ export default function Index() {
 	const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
 	const [isUpperCase, setIsUpperCase] = useState<boolean>(false)
 	const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(false)
+	const [isSpeechEnabled, setIsSpeechEnabled] = useState<boolean>(false)
 
-	// Load settings from localStorage on client-side
+	const getEnabledCharacters = useCallback(() => {
+		if (!enabledCharacters) return []
+		return allCharacters.filter((char) => enabledCharacters[char])
+	}, [enabledCharacters])
+
+	const showRandomCharacter = useCallback(() => {
+		if (isModalOpen) return
+		const chars = getEnabledCharacters()
+		if (chars.length === 0) {
+			setCurrentCharacter('')
+			return
+		}
+		let randomChar = chars[Math.floor(Math.random() * chars.length)] || ''
+		if (!isUpperCase) {
+			randomChar = randomChar.toLowerCase()
+		}
+		setCurrentCharacter(randomChar)
+		if (isSoundEnabled) {
+			playAudioForLetter(randomChar)
+		}
+	}, [getEnabledCharacters, isModalOpen, isUpperCase, isSoundEnabled])
+
+	// Initialize speech recognition
+	useEffect(() => {
+		let ignore = false
+		if (typeof window !== 'undefined' && isSpeechEnabled) {
+			const SpeechRecognition =
+				window.SpeechRecognition || window.webkitSpeechRecognition
+			if (SpeechRecognition) {
+				const recognition = new SpeechRecognition()
+				recognition.continuous = true
+				recognition.interimResults = true
+
+				recognition.onresult = (event) => {
+					if (ignore) return
+					const last = event.results.length - 1
+					const transcript = event.results[last]?.[0]?.transcript
+						.toLowerCase()
+						.trim()
+					console.log('Speech detected:', transcript)
+
+					if (!currentCharacter) return
+
+					const currentUpperChar = currentCharacter.toUpperCase()
+					const matchingWords = letterWords[currentUpperChar] || []
+
+					// Check if the transcript matches the current character or any of its word equivalents
+					if (
+						transcript === currentCharacter.toLowerCase() ||
+						transcript === currentUpperChar.toLowerCase() ||
+						matchingWords.some((word) =>
+							transcript?.includes(word.toLowerCase()),
+						) ||
+						transcript?.match(
+							new RegExp(`(^|\\s)${currentCharacter.toLowerCase()}(\\s|$)`),
+						)
+					) {
+						// console.log('Correct letter detected!')
+						showRandomCharacter()
+					}
+				}
+
+				recognition.onerror = (event) => {
+					console.error('Speech recognition error:', event.error)
+				}
+
+				recognition.start()
+
+				return () => {
+					recognition.stop()
+					ignore = true
+				}
+			}
+		}
+	}, [currentCharacter, showRandomCharacter, isSpeechEnabled])
+
 	useEffect(() => {
 		if (typeof window !== 'undefined') {
 			const savedEnabledCharacters = localStorage.getItem('enabledCharacters')
 			const savedCase = localStorage.getItem('isUpperCase')
 			const savedSound = localStorage.getItem('isSoundEnabled')
+			const savedSpeech = localStorage.getItem('isSpeechEnabled')
 
 			if (savedEnabledCharacters) {
-				// Cast the parsed JSON to the expected type
 				const parsedEnabledCharacters = JSON.parse(savedEnabledCharacters) as {
 					[key: string]: boolean
 				}
 				setEnabledCharacters(parsedEnabledCharacters)
 			} else {
-				// Initialize letters as enabled, numbers as disabled
 				const initialCharacters: { [key: string]: boolean } = {}
 				allLetters.forEach((char) => {
 					initialCharacters[char] = true
@@ -67,10 +167,13 @@ export default function Index() {
 			if (savedSound) {
 				setIsSoundEnabled(JSON.parse(savedSound ?? 'false') as boolean)
 			}
+
+			if (savedSpeech) {
+				setIsSpeechEnabled(JSON.parse(savedSpeech ?? 'false') as boolean)
+			}
 		}
 	}, [])
 
-	// Save settings to localStorage whenever they change
 	useEffect(() => {
 		if (typeof window !== 'undefined' && enabledCharacters) {
 			localStorage.setItem(
@@ -92,33 +195,15 @@ export default function Index() {
 		}
 	}, [isSoundEnabled])
 
-	// Function to get enabled characters
-	const getEnabledCharacters = useCallback(() => {
-		if (!enabledCharacters) return []
-		return allCharacters.filter((char) => enabledCharacters[char])
-	}, [enabledCharacters])
-
-	const showRandomCharacter = useCallback(() => {
-		if (isModalOpen) return // Do not change character when modal is open
-		const chars = getEnabledCharacters()
-		if (chars.length === 0) {
-			setCurrentCharacter('')
-			return
+	useEffect(() => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('isSpeechEnabled', JSON.stringify(isSpeechEnabled))
 		}
-		let randomChar = chars[Math.floor(Math.random() * chars.length)] || ''
-		if (!isUpperCase) {
-			randomChar = randomChar.toLowerCase()
-		}
-		setCurrentCharacter(randomChar)
-		if (isSoundEnabled) {
-			playAudioForLetter(randomChar)
-		}
-	}, [getEnabledCharacters, isModalOpen, isUpperCase, isSoundEnabled])
+	}, [isSpeechEnabled])
 
 	const handleKeyDown = useCallback(
 		(event: KeyboardEvent) => {
 			if (event.key === 'Escape' && isModalOpen) {
-				// Close the modal when Escape is pressed
 				setIsModalOpen(false)
 				return
 			}
@@ -203,13 +288,13 @@ export default function Index() {
 								setIsUpperCase={setIsUpperCase}
 								isSoundEnabled={isSoundEnabled}
 								setIsSoundEnabled={setIsSoundEnabled}
+								isSpeechEnabled={isSpeechEnabled}
+								setIsSpeechEnabled={setIsSpeechEnabled}
 							/>
 						</CardContent>
 					</Card>
 				</div>
 			)}
-
-			{/* Display Area */}
 			<div
 				onClick={showRandomCharacter}
 				className="flex h-full items-center justify-center"
@@ -229,8 +314,6 @@ export default function Index() {
 	)
 }
 
-// OptionsComponent
-
 function OptionsComponent({
 	enabledCharacters,
 	setEnabledCharacters,
@@ -238,6 +321,8 @@ function OptionsComponent({
 	setIsUpperCase,
 	isSoundEnabled,
 	setIsSoundEnabled,
+	isSpeechEnabled,
+	setIsSpeechEnabled,
 }: {
 	enabledCharacters: { [key: string]: boolean }
 	setEnabledCharacters: React.Dispatch<
@@ -247,6 +332,8 @@ function OptionsComponent({
 	setIsUpperCase: React.Dispatch<React.SetStateAction<boolean>>
 	isSoundEnabled: boolean
 	setIsSoundEnabled: React.Dispatch<React.SetStateAction<boolean>>
+	isSpeechEnabled: boolean
+	setIsSpeechEnabled: React.Dispatch<React.SetStateAction<boolean>>
 }) {
 	const selectAllCharacters = useCallback(() => {
 		const updatedCharacters: { [key: string]: boolean } = {}
@@ -345,9 +432,15 @@ function OptionsComponent({
 					/>
 					<span>Enable Sound</span>
 				</label>
+				<label className="flex items-center space-x-2">
+					<Checkbox
+						checked={isSpeechEnabled}
+						onCheckedChange={() => setIsSpeechEnabled((prev) => !prev)}
+					/>
+					<span>Enable Speech Recognition</span>
+				</label>
 			</div>
 
-			{/* Options Bar */}
 			<div className="mb-4 flex flex-wrap gap-2">
 				<Button onClick={selectAllLetters}>Letters</Button>
 				<Button onClick={selectVowels}>Vowels</Button>
