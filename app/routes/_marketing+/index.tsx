@@ -19,7 +19,7 @@ const vowels = ['A', 'E', 'I', 'O', 'U']
 const consonants = allLetters.filter((letter) => !vowels.includes(letter))
 
 // Define wide characters that need a smaller font size
-const wideCharacters = ['W', 'M']
+const wideCharacters = ['W', 'M', 'w', 'm']
 
 export default function Index() {
 	// Initialize state
@@ -28,11 +28,13 @@ export default function Index() {
 	} | null>(null)
 	const [currentCharacter, setCurrentCharacter] = useState<string>('')
 	const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
+	const [isUpperCase, setIsUpperCase] = useState<boolean>(false)
 
 	// Load settings from localStorage on client-side
 	useEffect(() => {
 		if (typeof window !== 'undefined') {
 			const savedEnabledCharacters = localStorage.getItem('enabledCharacters')
+			const savedCase = localStorage.getItem('isUpperCase')
 
 			if (savedEnabledCharacters) {
 				// Cast the parsed JSON to the expected type
@@ -51,6 +53,10 @@ export default function Index() {
 				})
 				setEnabledCharacters(initialCharacters)
 			}
+
+			if (savedCase) {
+				setIsUpperCase(JSON.parse(savedCase ?? 'false') as boolean)
+			}
 		}
 	}, [])
 
@@ -63,6 +69,12 @@ export default function Index() {
 			)
 		}
 	}, [enabledCharacters])
+
+	useEffect(() => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('isUpperCase', JSON.stringify(isUpperCase))
+		}
+	}, [isUpperCase])
 
 	// Function to get enabled characters
 	const getEnabledCharacters = useCallback(() => {
@@ -77,9 +89,12 @@ export default function Index() {
 			setCurrentCharacter('')
 			return
 		}
-		const randomChar = chars[Math.floor(Math.random() * chars.length)] || ''
+		let randomChar = chars[Math.floor(Math.random() * chars.length)] || ''
+		if (!isUpperCase) {
+			randomChar = randomChar.toLowerCase()
+		}
 		setCurrentCharacter(randomChar)
-	}, [getEnabledCharacters, isModalOpen])
+	}, [getEnabledCharacters, isModalOpen, isUpperCase])
 
 	const handleKeyDown = useCallback(
 		(event: KeyboardEvent) => {
@@ -93,13 +108,16 @@ export default function Index() {
 				event.preventDefault() // Prevent scrolling when space is pressed
 				showRandomCharacter()
 			} else if (/^[a-zA-Z0-9]$/.test(event.key)) {
-				const key = event.key.toUpperCase()
+				let key = event.key.toUpperCase()
 				if (enabledCharacters[key]) {
+					if (!isUpperCase) {
+						key = key.toLowerCase()
+					}
 					setCurrentCharacter(key)
 				}
 			}
 		},
-		[showRandomCharacter, enabledCharacters, isModalOpen],
+		[showRandomCharacter, enabledCharacters, isModalOpen, isUpperCase],
 	)
 
 	useEffect(() => {
@@ -153,6 +171,8 @@ export default function Index() {
 							<OptionsComponent
 								enabledCharacters={enabledCharacters}
 								setEnabledCharacters={setEnabledCharacters}
+								isUpperCase={isUpperCase}
+								setIsUpperCase={setIsUpperCase}
 							/>
 						</CardContent>
 					</Card>
@@ -184,11 +204,15 @@ export default function Index() {
 function OptionsComponent({
 	enabledCharacters,
 	setEnabledCharacters,
+	isUpperCase,
+	setIsUpperCase,
 }: {
 	enabledCharacters: { [key: string]: boolean }
 	setEnabledCharacters: React.Dispatch<
 		React.SetStateAction<{ [key: string]: boolean } | null>
 	>
+	isUpperCase: boolean
+	setIsUpperCase: React.Dispatch<React.SetStateAction<boolean>>
 }) {
 	const selectAllCharacters = useCallback(() => {
 		const updatedCharacters: { [key: string]: boolean } = {}
@@ -271,6 +295,17 @@ function OptionsComponent({
 
 	return (
 		<div className="min-w-[300px]">
+			{/* Case Toggle */}
+			<div className="mb-4">
+				<label className="flex items-center space-x-2">
+					<Checkbox
+						checked={isUpperCase}
+						onCheckedChange={() => setIsUpperCase((prev) => !prev)}
+					/>
+					<span>Uppercase Output</span>
+				</label>
+			</div>
+
 			{/* Options Bar */}
 			<div className="mb-4 flex flex-wrap gap-2">
 				<Button onClick={selectAllLetters}>Letters</Button>
