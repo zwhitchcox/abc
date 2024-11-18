@@ -11,15 +11,6 @@ WORKDIR /myapp
 # Build the app
 ARG COMMIT_SHA
 ENV COMMIT_SHA=$COMMIT_SHA
-ENV FLY="true"
-ENV LITEFS_DIR="/litefs/data"
-ENV DATABASE_FILENAME="sqlite.db"
-ENV DATABASE_PATH="$LITEFS_DIR/$DATABASE_FILENAME"
-ENV DATABASE_URL="file:$DATABASE_PATH"
-ENV CACHE_DATABASE_FILENAME="cache.db"
-ENV CACHE_DATABASE_PATH="$LITEFS_DIR/$CACHE_DATABASE_FILENAME"
-ENV INTERNAL_PORT="8080"
-ENV PORT="8081"
 # For WAL support: https://github.com/prisma/prisma-engines/issues/4675#issuecomment-1914383246
 ENV PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK = "1"
 ADD package.json pnpm-lock.yaml .npmrc ./
@@ -37,9 +28,22 @@ RUN --mount=type=secret,id=SENTRY_AUTH_TOKEN \
 # Setup production node_modules
 
 # Finally, build the production image with minimal footprint
+RUN echo "#!/bin/sh\nset -x\nsqlite3 \$DATABASE_URL" > /usr/local/bin/database-cli && chmod +x /usr/local/bin/database-cli
+RUN INTERNAL_COMMAND_TOKEN=$(openssl rand -hex 32) && \
+  echo "INTERNAL_COMMAND_TOKEN=$INTERNAL_COMMAND_TOKEN" > .env
 ENV FLY="true"
-ENV PORT="8080"
+ENV LITEFS_DIR="/litefs/data"
+ENV DATABASE_FILENAME="sqlite.db"
+ENV DATABASE_PATH="$LITEFS_DIR/$DATABASE_FILENAME"
+ENV DATABASE_URL="file:$DATABASE_PATH"
+ENV CACHE_DATABASE_FILENAME="cache.db"
+ENV CACHE_DATABASE_PATH="$LITEFS_DIR/$CACHE_DATABASE_FILENAME"
+ENV INTERNAL_PORT="8080"
+ENV PORT="8081"
 ENV NODE_ENV="production"
+COPY --from=flyio/litefs:0.5.11 /usr/local/bin/litefs /usr/local/bin/litefs
+ADD other/litefs.yml /etc/litefs.yml
+RUN mkdir -p /data ${LITEFS_DIR}
 WORKDIR /myapp
 ADD . .
 CMD ["litefs", "mount"]
