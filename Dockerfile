@@ -6,6 +6,8 @@ RUN corepack enable
 # Install openssl for Prisma
 RUN apt-get update && apt-get install -y openssl ca-certificates
 
+WORKDIR /myapp
+
 # Build the app
 ARG COMMIT_SHA
 ENV COMMIT_SHA=$COMMIT_SHA
@@ -18,14 +20,14 @@ ENV CACHE_DATABASE_FILENAME="cache.db"
 ENV CACHE_DATABASE_PATH="$LITEFS_DIR/$CACHE_DATABASE_FILENAME"
 ENV INTERNAL_PORT="8080"
 ENV PORT="8081"
-ENV NODE_ENV="production"
 # For WAL support: https://github.com/prisma/prisma-engines/issues/4675#issuecomment-1914383246
 ENV PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK = "1"
-WORKDIR /myapp
 ADD package.json pnpm-lock.yaml .npmrc ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 # prisma files will be generated in the production image, see below
 ADD . .
+
+ENV NODE_ENV="production"
 # Mount the secret and set it as an environment variable and run the build
 RUN --mount=type=secret,id=SENTRY_AUTH_TOKEN \
     export SENTRY_AUTH_TOKEN=$(cat /run/secrets/SENTRY_AUTH_TOKEN) && \
