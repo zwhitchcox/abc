@@ -53,6 +53,7 @@ import { type Theme, getTheme } from './utils/theme.server.ts'
 import { makeTimings, time } from './utils/timing.server.ts'
 import { getToast } from './utils/toast.server.ts'
 import { useOptionalUser, useUser } from './utils/user.ts'
+const SITE_NAME = 'ABC'
 
 export const links: LinksFunction = () => {
 	return [
@@ -76,8 +77,8 @@ export const links: LinksFunction = () => {
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
 	return [
-		{ title: data ? 'ABC' : 'Error | Epic Notes' },
-		{ name: 'description', content: `Your own captain's log` },
+		{ title: data ? SITE_NAME : `${Error} | ${SITE_NAME}` },
+		{ name: 'description', content: `Teach your kids to read` },
 	]
 }
 
