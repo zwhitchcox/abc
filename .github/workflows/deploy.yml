@@ -28,7 +28,7 @@ jobs:
           node-version: 20
 
       - name: 📥 Download deps
-        uses: bahmutov/npm-install@v1
+        run: pnpm install --frozen-lockfile
 
       - name: 🖼 Build icons
         run: npm run build:icons
@@ -49,7 +49,7 @@ jobs:
           node-version: 20
 
       - name: 📥 Download deps
-        uses: bahmutov/npm-install@v1
+        run: pnpm install --frozen-lockfile
 
       - name: 🖼 Build icons
         run: npm run build:icons
@@ -70,7 +70,7 @@ jobs:
           node-version: 20
 
       - name: 📥 Download deps
-        uses: bahmutov/npm-install@v1
+        run: pnpm install --frozen-lockfile
 
       - name: 🏄 Copy test env vars
         run: cp .env.example .env
@@ -98,7 +98,7 @@ jobs:
           node-version: 20
 
       - name: 📥 Download deps
-        uses: bahmutov/npm-install@v1
+        run: pnpm install --frozen-lockfile
 
       - name: 📥 Install Playwright Browsers
         run: npm run test:e2e:install
