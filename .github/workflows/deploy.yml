@@ -25,7 +25,11 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+      - name: enable corepack
+        run: |
+          corepack enable
+          pnpm --version
 
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
@@ -46,7 +50,11 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+      - name: enable corepack
+        run: |
+          corepack enable
+          pnpm --version
 
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
@@ -67,7 +75,12 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+
+      - name: enable corepack
+        run: |
+          corepack enable
+          pnpm --version
 
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
@@ -95,7 +108,12 @@ jobs:
       - name: ⎔ Setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+
+      - name: enable corepack
+        run: |
+          corepack enable
+          pnpm --version
 
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
