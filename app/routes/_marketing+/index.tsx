@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Button } from '#app/components/ui/button'
 import {
 	Card,
@@ -15,11 +15,6 @@ const vowels = ['A', 'E', 'I', 'O', 'U']
 const consonants = allLetters.filter((letter) => !vowels.includes(letter))
 const wideCharacters = ['W', 'M', 'w', 'm']
 
-const playAudioForLetter = (letter: string) => {
-	const audio = new Audio(`/letters/${letter.toLowerCase()}.wav`)
-	void audio.play()
-}
-
 type Options = {
 	enabledCharacters: { [key: string]: boolean } | null
 	isUpperCase: boolean
@@ -34,9 +29,22 @@ export default function Index() {
 	})
 	const [currentCharacter, setCurrentCharacter] = useState<string>('')
 	const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
+	const audioRef = useRef<HTMLAudioElement | null>(null)
+
+	const playAudioForLetter = useCallback((letter: string) => {
+		if (audioRef.current) {
+			audioRef.current.src = `/letters/${letter.toLowerCase()}.wav`
+			return audioRef.current.play()
+		}
+		return Promise.resolve()
+	}, [])
+
+	const isAudioPlaying = useCallback(() => {
+		return audioRef.current && !audioRef.current.paused
+	}, [])
 
 	const showRandomCharacter = useCallback(() => {
-		if (isModalOpen) return
+		if (isModalOpen || isAudioPlaying()) return
 		const chars = options.enabledCharacters
 			? allCharacters.filter((char) => options.enabledCharacters![char])
 			: allCharacters
@@ -50,14 +58,22 @@ export default function Index() {
 		}
 		setCurrentCharacter(randomChar)
 		if (options.isSoundEnabled) {
-			playAudioForLetter(randomChar)
+			void playAudioForLetter(randomChar)
 		}
 	}, [
 		options.enabledCharacters,
 		isModalOpen,
 		options.isUpperCase,
 		options.isSoundEnabled,
+		playAudioForLetter,
+		isAudioPlaying,
 	])
+
+	useEffect(() => {
+		if (typeof window !== 'undefined') {
+			audioRef.current = new Audio()
+		}
+	}, [])
 
 	useEffect(() => {
 		if (typeof window !== 'undefined') {
@@ -92,7 +108,7 @@ export default function Index() {
 				setIsModalOpen(false)
 				return
 			}
-			if (!options.enabledCharacters || isModalOpen) return
+			if (!options.enabledCharacters || isModalOpen || isAudioPlaying()) return
 			if (event.key === ' ') {
 				event.preventDefault()
 				showRandomCharacter()
@@ -104,7 +120,7 @@ export default function Index() {
 					}
 					setCurrentCharacter(key)
 					if (options.isSoundEnabled) {
-						playAudioForLetter(key)
+						void playAudioForLetter(key)
 					}
 				}
 			}
@@ -115,6 +131,8 @@ export default function Index() {
 			isModalOpen,
 			options.isUpperCase,
 			options.isSoundEnabled,
+			playAudioForLetter,
+			isAudioPlaying,
 		],
 	)
 
