@@ -157,7 +157,10 @@ function Document({
 				<ClientHintCheck nonce={nonce} />
 				<Meta />
 				<meta charSet="utf-8" />
-				<meta name="viewport" content="width=device-width,initial-scale=1" />
+				<meta
+					name="viewport"
+					content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0"
+				/>
 				{allowIndexing ? null : (
 					<meta name="robots" content="noindex, nofollow" />
 				)}
