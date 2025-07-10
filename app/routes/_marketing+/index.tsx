@@ -246,7 +246,7 @@ export default function Index() {
 			{isModalOpen && (
 				<div
 					onClick={toggleModal}
-					className="fixed inset-0 z-20 flex items-center justify-center bg-black bg-opacity-50"
+					className="fixed inset-0 z-20 flex items-center justify-center bg-black/50"
 				>
 					<Card
 						onClick={(e) => e.stopPropagation()}
