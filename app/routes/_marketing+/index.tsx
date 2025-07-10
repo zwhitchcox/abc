@@ -16,6 +16,8 @@ const consonants = allLetters.filter((letter) => !vowels.includes(letter))
 const wideCharacters = ['W', 'M', 'w', 'm']
 
 type Options = {
+	isLettersEnabled: boolean
+	isNumbersEnabled: boolean
 	enabledCharacters: { [key: string]: boolean } | null
 	isUpperCase: boolean
 	isSoundEnabled: boolean
@@ -24,6 +26,8 @@ type Options = {
 
 export default function Index() {
 	const [options, setOptions] = useState<Options>({
+		isLettersEnabled: true,
+		isNumbersEnabled: false,
 		enabledCharacters: null,
 		isUpperCase: false,
 		isSoundEnabled: false,
@@ -48,14 +52,27 @@ export default function Index() {
 
 	const showRandomCharacter = useCallback(() => {
 		if (isModalOpen || isAudioPlaying()) return
-		const chars = options.enabledCharacters
-			? allCharacters.filter((char) => options.enabledCharacters![char])
-			: allCharacters
-		if (chars.length === 0) {
+		
+		const availableChars: string[] = []
+		if (options.isLettersEnabled) {
+			const enabledLetters = options.enabledCharacters 
+				? allLetters.filter(char => options.enabledCharacters![char])
+				: allLetters
+			availableChars.push(...enabledLetters)
+		}
+		if (options.isNumbersEnabled) {
+			const enabledNumbers = options.enabledCharacters
+				? allNumbers.filter(char => options.enabledCharacters![char])
+				: allNumbers
+			availableChars.push(...enabledNumbers)
+		}
+		
+		if (availableChars.length === 0) {
 			setCurrentCharacter('')
 			return
 		}
-		let randomChar = chars[Math.floor(Math.random() * chars.length)] || ''
+		
+		let randomChar = availableChars[Math.floor(Math.random() * availableChars.length)] || ''
 		if (!options.isUpperCase) {
 			randomChar = randomChar.toLowerCase()
 		}
@@ -64,6 +81,8 @@ export default function Index() {
 			void playAudioForLetter(randomChar)
 		}
 	}, [
+		options.isLettersEnabled,
+		options.isNumbersEnabled,
 		options.enabledCharacters,
 		isModalOpen,
 		options.isUpperCase,
@@ -82,8 +101,25 @@ export default function Index() {
 		if (typeof window !== 'undefined') {
 			const savedOptions = localStorage.getItem('options')
 			if (savedOptions) {
-				setOptions(JSON.parse(savedOptions) as Options)
+				const parsed = JSON.parse(savedOptions)
+				// Handle migration from old format
+				if ('enabledCharacters' in parsed) {
+					// Migrate from old format
+					const hasLetters = allLetters.some(l => parsed.enabledCharacters[l])
+					const hasNumbers = allNumbers.some(n => parsed.enabledCharacters[n])
+					setOptions({
+						isLettersEnabled: hasLetters,
+						isNumbersEnabled: hasNumbers,
+						enabledCharacters: parsed.enabledCharacters,
+						isUpperCase: parsed.isUpperCase || false,
+						isSoundEnabled: parsed.isSoundEnabled || false,
+						isAccumulateMode: parsed.isAccumulateMode || false,
+					})
+				} else {
+					setOptions(parsed as Options)
+				}
 			} else {
+				// Initialize with all letters enabled, no numbers
 				const initialCharacters: { [key: string]: boolean } = {}
 				allLetters.forEach((char) => {
 					initialCharacters[char] = true
@@ -111,7 +147,7 @@ export default function Index() {
 				setIsModalOpen(false)
 				return
 			}
-			if (!options.enabledCharacters || isModalOpen || isAudioPlaying()) return
+			if (isModalOpen || isAudioPlaying()) return
 			if (event.key === ' ') {
 				event.preventDefault()
 				if (options.isAccumulateMode) {
@@ -119,9 +155,30 @@ export default function Index() {
 				} else {
 					showRandomCharacter()
 				}
-			} else if (event.key === 'Tab') {
+			} else if (event.key === 'Tab' && !event.shiftKey) {
 				event.preventDefault()
 				setOptions((prev) => ({ ...prev, isAccumulateMode: !prev.isAccumulateMode }))
+			} else if (event.key === 'Tab' && event.shiftKey) {
+				event.preventDefault()
+				// Clear current display when switching modes
+				setCurrentCharacter('')
+				setAccumulatedText('')
+				// Toggle between letters and numbers
+				setOptions((prev) => {
+					if (prev.isLettersEnabled && !prev.isNumbersEnabled) {
+						// Currently letters only, switch to numbers only
+						return { ...prev, isLettersEnabled: false, isNumbersEnabled: true }
+					} else if (!prev.isLettersEnabled && prev.isNumbersEnabled) {
+						// Currently numbers only, switch to both
+						return { ...prev, isLettersEnabled: true, isNumbersEnabled: true }
+					} else if (prev.isLettersEnabled && prev.isNumbersEnabled) {
+						// Currently both, switch to letters only
+						return { ...prev, isLettersEnabled: true, isNumbersEnabled: false }
+					} else {
+						// Neither enabled, switch to letters
+						return { ...prev, isLettersEnabled: true, isNumbersEnabled: false }
+					}
+				})
 			} else if (event.key === 'Backspace' && options.isAccumulateMode) {
 				event.preventDefault()
 				setAccumulatedText(prev => prev.slice(0, -1))
@@ -130,7 +187,14 @@ export default function Index() {
 				setAccumulatedText('')
 			} else if (/^[a-zA-Z0-9]$/.test(event.key)) {
 				let key = event.key.toUpperCase()
-				if (options.enabledCharacters[key]) {
+				const isLetter = /^[A-Z]$/.test(key)
+				const isNumber = /^[0-9]$/.test(key)
+				
+				if ((isLetter && options.isLettersEnabled) || (isNumber && options.isNumbersEnabled)) {
+					// Also check if this specific character is enabled
+					if (options.enabledCharacters && !options.enabledCharacters[key]) {
+						return
+					}
 					if (!options.isUpperCase) {
 						key = key.toLowerCase()
 					}
@@ -147,6 +211,8 @@ export default function Index() {
 		},
 		[
 			showRandomCharacter,
+			options.isLettersEnabled,
+			options.isNumbersEnabled,
 			options.enabledCharacters,
 			isModalOpen,
 			options.isUpperCase,
@@ -236,87 +302,69 @@ function OptionsComponent({
 	options: Options
 	setOptions: React.Dispatch<React.SetStateAction<Options>>
 }) {
-	const selectAllCharacters = useCallback(() => {
-		const updatedCharacters: { [key: string]: boolean } = {}
-		allCharacters.forEach((char) => {
-			updatedCharacters[char] = true
-		})
-		setOptions((prev) => ({
-			...prev,
-			enabledCharacters: updatedCharacters,
-		}))
-	}, [setOptions])
-
-	const deselectAllCharacters = useCallback(() => {
-		const updatedCharacters: { [key: string]: boolean } = {}
-		allCharacters.forEach((char) => {
-			updatedCharacters[char] = false
-		})
-		setOptions((prev) => ({
-			...prev,
-			enabledCharacters: updatedCharacters,
-		}))
-	}, [setOptions])
-
 	const selectAllLetters = useCallback(() => {
-		const updatedCharacters: { [key: string]: boolean } = {}
-		allLetters.forEach((char) => {
-			updatedCharacters[char] = true
-		})
-		allNumbers.forEach((char) => {
-			updatedCharacters[char] = false
-		})
 		setOptions((prev) => ({
 			...prev,
-			enabledCharacters: updatedCharacters,
+			enabledCharacters: {
+				...prev.enabledCharacters,
+				...Object.fromEntries(allLetters.map(char => [char, true])),
+				...Object.fromEntries(allNumbers.map(char => [char, false])),
+			},
 		}))
 	}, [setOptions])
 
 	const selectVowels = useCallback(() => {
-		const updatedCharacters: { [key: string]: boolean } = {}
-		vowels.forEach((char) => {
-			updatedCharacters[char] = true
-		})
-		consonants.forEach((char) => {
-			updatedCharacters[char] = false
-		})
-		allNumbers.forEach((char) => {
-			updatedCharacters[char] = false
-		})
 		setOptions((prev) => ({
 			...prev,
-			enabledCharacters: updatedCharacters,
+			enabledCharacters: {
+				...prev.enabledCharacters,
+				...Object.fromEntries(vowels.map(char => [char, true])),
+				...Object.fromEntries(consonants.map(char => [char, false])),
+				...Object.fromEntries(allNumbers.map(char => [char, false])),
+			},
 		}))
 	}, [setOptions])
 
 	const selectConsonants = useCallback(() => {
-		const updatedCharacters: { [key: string]: boolean } = {}
-		consonants.forEach((char) => {
-			updatedCharacters[char] = true
-		})
-		vowels.forEach((char) => {
-			updatedCharacters[char] = false
-		})
-		allNumbers.forEach((char) => {
-			updatedCharacters[char] = false
-		})
 		setOptions((prev) => ({
 			...prev,
-			enabledCharacters: updatedCharacters,
+			enabledCharacters: {
+				...prev.enabledCharacters,
+				...Object.fromEntries(consonants.map(char => [char, true])),
+				...Object.fromEntries(vowels.map(char => [char, false])),
+				...Object.fromEntries(allNumbers.map(char => [char, false])),
+			},
 		}))
 	}, [setOptions])
 
 	const selectAllNumbers = useCallback(() => {
-		const updatedCharacters: { [key: string]: boolean } = {}
-		allLetters.forEach((char) => {
-			updatedCharacters[char] = false
-		})
-		allNumbers.forEach((char) => {
-			updatedCharacters[char] = true
-		})
 		setOptions((prev) => ({
 			...prev,
-			enabledCharacters: updatedCharacters,
+			enabledCharacters: {
+				...prev.enabledCharacters,
+				...Object.fromEntries(allLetters.map(char => [char, false])),
+				...Object.fromEntries(allNumbers.map(char => [char, true])),
+			},
+		}))
+	}, [setOptions])
+
+	const selectAllCharacters = useCallback(() => {
+		setOptions((prev) => ({
+			...prev,
+			enabledCharacters: {
+				...prev.enabledCharacters,
+				...Object.fromEntries(allCharacters.map(char => [char, true])),
+			},
+		}))
+	}, [setOptions])
+
+	const deselectAllCharacters = useCallback(() => {
+		setOptions((prev) => ({
+			...prev,
+			enabledCharacters: {
+				...prev.enabledCharacters,
+				...Object.fromEntries(allCharacters.map(char => [char, false])),
+			},
 		}))
 	}, [setOptions])
 
@@ -339,6 +387,33 @@ function OptionsComponent({
 	return (
 		<div className="min-w-[300px]">
 			<div className="mb-4 space-y-2">
+				<h3 className="font-semibold mb-2">Character Types</h3>
+				<label className="flex items-center space-x-2">
+					<Checkbox
+						checked={options.isLettersEnabled}
+						onCheckedChange={() =>
+							setOptions((prev) => ({
+								...prev,
+								isLettersEnabled: !prev.isLettersEnabled,
+							}))
+						}
+					/>
+					<span>Letters (A-Z)</span>
+				</label>
+				<label className="flex items-center space-x-2">
+					<Checkbox
+						checked={options.isNumbersEnabled}
+						onCheckedChange={() =>
+							setOptions((prev) => ({
+								...prev,
+								isNumbersEnabled: !prev.isNumbersEnabled,
+							}))
+						}
+					/>
+					<span>Numbers (0-9)</span>
+				</label>
+				
+				<h3 className="font-semibold mb-2 mt-4">Display Options</h3>
 				<label className="flex items-center space-x-2">
 					<Checkbox
 						checked={options.isUpperCase}
@@ -378,18 +453,20 @@ function OptionsComponent({
 			</div>
 
 			<div className="mb-4 flex flex-wrap gap-2">
-				<Button onClick={selectAllLetters}>Letters</Button>
+				<Button onClick={selectAllLetters}>All Letters</Button>
 				<Button onClick={selectVowels}>Vowels</Button>
 				<Button onClick={selectConsonants}>Consonants</Button>
-				<Button onClick={selectAllNumbers}>Numbers</Button>
+				<Button onClick={selectAllNumbers}>All Numbers</Button>
 				<Button onClick={selectAllCharacters}>All</Button>
-				<Button onClick={deselectAllCharacters}>Deselect All</Button>
+				<Button onClick={deselectAllCharacters}>None</Button>
 			</div>
+
+			<h3 className="font-semibold mb-2">Individual Characters</h3>
 			<div className="flex flex-wrap gap-2">
 				{allCharacters.map((char) => (
 					<label key={char} className="flex items-center space-x-1">
 						<Checkbox
-							checked={options.enabledCharacters?.[char]}
+							checked={options.enabledCharacters?.[char] || false}
 							onCheckedChange={() => toggleCharacter(char)}
 						/>
 						<span>{char}</span>
