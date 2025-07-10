@@ -199,6 +199,7 @@ const fullScreenRoutes = {
 	'/': true,
 	'/abc': true,
 	'/words': true,
+	'/colors': true,
 }
 
 function App() {

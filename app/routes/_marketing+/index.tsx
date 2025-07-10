@@ -20,6 +20,12 @@ const games = [
 		path: '/words',
 		features: ['Simple words', 'Speech recognition', 'Different difficulty levels', 'Categories'],
 	},
+	{
+		title: 'Colors',
+		description: 'Learn colors with visual display and names',
+		path: '/colors',
+		features: ['12 basic colors', 'Color names', 'Full screen display', 'Toggle name visibility'],
+	},
 ]
 
 export default function Index() {
