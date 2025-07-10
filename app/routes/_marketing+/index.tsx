@@ -19,6 +19,7 @@ type Options = {
 	enabledCharacters: { [key: string]: boolean } | null
 	isUpperCase: boolean
 	isSoundEnabled: boolean
+	isAccumulateMode: boolean
 }
 
 export default function Index() {
@@ -26,8 +27,10 @@ export default function Index() {
 		enabledCharacters: null,
 		isUpperCase: false,
 		isSoundEnabled: false,
+		isAccumulateMode: false,
 	})
 	const [currentCharacter, setCurrentCharacter] = useState<string>('')
+	const [accumulatedText, setAccumulatedText] = useState<string>('')
 	const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
 	const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -111,14 +114,31 @@ export default function Index() {
 			if (!options.enabledCharacters || isModalOpen || isAudioPlaying()) return
 			if (event.key === ' ') {
 				event.preventDefault()
-				showRandomCharacter()
+				if (options.isAccumulateMode) {
+					setAccumulatedText(prev => prev + ' ')
+				} else {
+					showRandomCharacter()
+				}
+			} else if (event.key === 'Tab') {
+				event.preventDefault()
+				setOptions((prev) => ({ ...prev, isAccumulateMode: !prev.isAccumulateMode }))
+			} else if (event.key === 'Backspace' && options.isAccumulateMode) {
+				event.preventDefault()
+				setAccumulatedText(prev => prev.slice(0, -1))
+			} else if (event.key === 'Enter' && options.isAccumulateMode) {
+				event.preventDefault()
+				setAccumulatedText('')
 			} else if (/^[a-zA-Z0-9]$/.test(event.key)) {
 				let key = event.key.toUpperCase()
 				if (options.enabledCharacters[key]) {
 					if (!options.isUpperCase) {
 						key = key.toLowerCase()
 					}
-					setCurrentCharacter(key)
+					if (options.isAccumulateMode) {
+						setAccumulatedText(prev => prev + key)
+					} else {
+						setCurrentCharacter(key)
+					}
 					if (options.isSoundEnabled) {
 						void playAudioForLetter(key)
 					}
@@ -131,6 +151,7 @@ export default function Index() {
 			isModalOpen,
 			options.isUpperCase,
 			options.isSoundEnabled,
+			options.isAccumulateMode,
 			playAudioForLetter,
 			isAudioPlaying,
 		],
@@ -181,16 +202,28 @@ export default function Index() {
 				onClick={showRandomCharacter}
 				className="flex h-full items-center justify-center"
 			>
-				<span
-					style={{
-						fontSize: wideCharacters.includes(currentCharacter)
-							? '60vh'
-							: '80vh',
-						lineHeight: '1',
-					}}
-				>
-					{currentCharacter}
-				</span>
+				{options.isAccumulateMode ? (
+					<span
+						style={{
+							fontSize: '20vh',
+							lineHeight: '1',
+							letterSpacing: '0.1em',
+						}}
+					>
+						{accumulatedText}
+					</span>
+				) : (
+					<span
+						style={{
+							fontSize: wideCharacters.includes(currentCharacter)
+								? '60vh'
+								: '80vh',
+							lineHeight: '1',
+						}}
+					>
+						{currentCharacter}
+					</span>
+				)}
 			</div>
 		</div>
 	)
@@ -329,6 +362,18 @@ function OptionsComponent({
 						}
 					/>
 					<span>Enable Sound</span>
+				</label>
+				<label className="flex items-center space-x-2">
+					<Checkbox
+						checked={options.isAccumulateMode}
+						onCheckedChange={() =>
+							setOptions((prev) => ({
+								...prev,
+								isAccumulateMode: !prev.isAccumulateMode,
+							}))
+						}
+					/>
+					<span>Word Mode (Tab to toggle)</span>
 				</label>
 			</div>
 
