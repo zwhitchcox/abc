@@ -3,8 +3,8 @@ FROM node:24-bookworm-slim as base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
-# Install openssl for Prisma and sqlite3
-RUN apt-get update && apt-get install -y openssl ca-certificates sqlite3
+# Install openssl for Prisma, sqlite3, and build dependencies for better-sqlite3
+RUN apt-get update && apt-get install -y openssl ca-certificates sqlite3 python3 make gcc g++ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /myapp
 
