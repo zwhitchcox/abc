@@ -24,7 +24,7 @@ const games = [
 		title: 'Colors',
 		description: 'Learn colors with visual display and names',
 		path: '/colors',
-		features: ['12 basic colors', 'Color names', 'Full screen display', 'Toggle name visibility'],
+		features: ['140+ web colors', 'Color names', 'Full screen display', 'Smart text contrast'],
 	},
 ]
 
