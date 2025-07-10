@@ -62,6 +62,9 @@ jobs:
       - name: 🖼 Build icons
         run: npm run build:icons
 
+      - name: 🏗 Generate Prisma Client
+        run: npx prisma generate
+
       - name: 🔎 Type check
         run: npm run typecheck --if-present
 
