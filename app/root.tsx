@@ -195,6 +195,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 const fullScreenRoutes = {
 	'/': true,
+	'/abc': true,
+	'/words': true,
 }
 
 function App() {
