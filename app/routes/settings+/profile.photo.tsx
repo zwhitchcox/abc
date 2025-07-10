@@ -109,7 +109,7 @@ export async function action({ request }: ActionFunctionArgs) {
 		return redirect('/settings/profile')
 	}
 
-	await prisma.$transaction(async ($prisma) => {
+	await prisma.$transaction(async ($prisma: any) => {
 		await $prisma.userImage.deleteMany({ where: { userId } })
 		await $prisma.user.update({
 			where: { id: userId },

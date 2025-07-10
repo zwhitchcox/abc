@@ -235,7 +235,7 @@ export default function Index() {
 	if (options.enabledCharacters === null) return null
 
 	return (
-		<div className="relative box-border h-screen touch-manipulation select-none">
+		<div className="relative box-border h-full touch-manipulation select-none">
 			<Button
 				onClick={toggleModal}
 				className="absolute right-5 top-5 z-10 px-4 py-2 text-lg"

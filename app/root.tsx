@@ -24,6 +24,8 @@ import { useToast } from './components/toaster.tsx'
 import { href as iconsHref } from './components/ui/icon.tsx'
 import { EpicToaster } from './components/ui/sonner.tsx'
 import { RootLayout } from './routes/_layout.tsx'
+import { AppSidebar } from './components/app-sidebar.tsx'
+import { SidebarProvider, SidebarTrigger } from './components/ui/sidebar.tsx'
 import {
 	useOptionalTheme,
 	useTheme,
@@ -210,7 +212,13 @@ function App() {
 	return (
 		<>
 			{isFullScreen ? (
-				<Outlet />
+				<SidebarProvider>
+					<AppSidebar />
+					<main className="relative w-full">
+						<SidebarTrigger className="absolute top-4 left-4 z-10" />
+						<Outlet />
+					</main>
+				</SidebarProvider>
 			) : (
 				<RootLayout>
 					<Outlet />
