@@ -15,6 +15,8 @@ ENV COMMIT_SHA=$COMMIT_SHA
 ENV PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK = "1"
 ADD package.json pnpm-lock.yaml .npmrc ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+# Rebuild better-sqlite3 to ensure native bindings are built
+RUN pnpm rebuild better-sqlite3
 # prisma files will be generated in the production image, see below
 ADD . .
 
