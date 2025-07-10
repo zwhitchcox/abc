@@ -26,3 +26,4 @@ node_modules
 /app/components/ui/icons
 
 vite.config.ts-timestamp*
+pnpm-workspace.yaml
