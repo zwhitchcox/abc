@@ -88,6 +88,9 @@ jobs:
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
 
+      - name: 🏗 Rebuild better-sqlite3
+        run: pnpm rebuild better-sqlite3
+
       - name: 🏄 Copy test env vars
         run: cp .env.example .env
 
@@ -120,6 +123,9 @@ jobs:
 
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
+
+      - name: 🏗 Rebuild better-sqlite3
+        run: pnpm rebuild better-sqlite3
 
       - name: 📥 Install Playwright Browsers
         run: npm run test:e2e:install
