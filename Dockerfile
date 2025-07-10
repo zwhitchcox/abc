@@ -3,8 +3,8 @@ FROM node:24-bookworm-slim as base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
-# Install openssl for Prisma
-RUN apt-get update && apt-get install -y openssl ca-certificates
+# Install openssl for Prisma and sqlite3
+RUN apt-get update && apt-get install -y openssl ca-certificates sqlite3
 
 WORKDIR /myapp
 
@@ -15,8 +15,6 @@ ENV COMMIT_SHA=$COMMIT_SHA
 ENV PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK = "1"
 ADD package.json pnpm-lock.yaml .npmrc ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
-# Rebuild better-sqlite3 to ensure native bindings are built
-RUN pnpm rebuild better-sqlite3
 # prisma files will be generated in the production image, see below
 ADD . .
 
