@@ -88,13 +88,7 @@ jobs:
       - name: 📥 Download deps
         run: pnpm install --frozen-lockfile
 
-      - name: 🏗 Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y python3 make gcc g++ node-gyp
-
-      - name: 🏗 Rebuild better-sqlite3
-        run: pnpm rebuild better-sqlite3 --force
-
-      - name: 🏄 Copy test env vars
+      - name: Copy test env vars
         run: cp .env.example .env
 
       - name: 🖼 Build icons
@@ -129,9 +123,6 @@ jobs:
 
       - name: 🏗 Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y python3 make gcc g++ node-gyp
-
-      - name: 🏗 Rebuild better-sqlite3
-        run: pnpm rebuild better-sqlite3 --force
 
       - name: 📥 Install Playwright Browsers
         run: npm run test:e2e:install

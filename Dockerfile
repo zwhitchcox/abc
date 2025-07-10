@@ -15,7 +15,6 @@ ENV COMMIT_SHA=$COMMIT_SHA
 ENV PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK = "1"
 ADD package.json pnpm-lock.yaml .npmrc ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
-# prisma files will be generated in the production image, see below
 ADD . .
 
 ENV NODE_ENV="production"
