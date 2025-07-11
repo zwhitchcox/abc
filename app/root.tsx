@@ -213,7 +213,7 @@ function App() {
 	return (
 		<>
 			{isFullScreen ? (
-				<SidebarProvider>
+				<SidebarProvider defaultOpen={false}>
 					<AppSidebar />
 					<main className="relative w-full">
 						<SidebarTrigger className="absolute top-4 left-4 z-10" />
