@@ -1,0 +1,50 @@
+{
+  "topics": [
+    {
+      "name": "birds",
+      "items": [
+        "blue jay",
+        "cardinal",
+        "robin",
+        "sparrow",
+        "eagle",
+        "owl",
+        "hummingbird",
+        "woodpecker",
+        "crow",
+        "dove"
+      ]
+    },
+    {
+      "name": "animals",
+      "items": [
+        "dog",
+        "cat",
+        "elephant",
+        "lion",
+        "tiger",
+        "bear",
+        "rabbit",
+        "horse",
+        "cow",
+        "pig"
+      ]
+    },
+    {
+      "name": "fruits",
+      "items": [
+        "apple",
+        "banana",
+        "orange",
+        "strawberry",
+        "grape",
+        "watermelon",
+        "pineapple",
+        "mango",
+        "peach",
+        "cherry"
+      ]
+    }
+  ],
+  "imagesPerItem": 3
+}
