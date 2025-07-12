@@ -31,7 +31,8 @@
     "validate": "run-p \"test -- --run\" lint typecheck test:e2e:run",
     "download-images": "tsx scripts/download-images-batch.ts",
     "check-images": "tsx scripts/check-images.ts",
-    "upload-images": "./scripts/upload-images-sftp.sh"
+    "upload-images": "./scripts/upload-images-sftp.sh",
+    "sync-images": "npm run download-images && npm run upload-images"
   },
   "prettier": "@epic-web/config/prettier",
   "eslintIgnore": [
