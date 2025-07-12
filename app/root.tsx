@@ -200,6 +200,7 @@ const fullScreenRoutes = {
 	'/abc': true,
 	'/words': true,
 	'/colors': true,
+	'/flashcards': true,
 }
 
 function App() {

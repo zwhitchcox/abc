@@ -26,6 +26,12 @@ const games = [
 		path: '/colors',
 		features: ['21 basic colors', 'Color names', 'Full screen display', 'Toggle name visibility'],
 	},
+	{
+		title: 'Flashcards',
+		description: 'Learn with picture flashcards of animals, birds, and fruits',
+		path: '/flashcards',
+		features: ['Real images', 'Name reveal on space/click', 'Random order', 'Auto-show names option'],
+	},
 ]
 
 export default function Index() {
