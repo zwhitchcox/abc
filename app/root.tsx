@@ -18,14 +18,14 @@ import { withSentry } from '@sentry/remix'
 import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import appleTouchIconAssetUrl from './assets/favicons/apple-touch-icon.png'
 import faviconAssetUrl from './assets/favicons/favicon.svg'
+import { AppSidebar } from './components/app-sidebar.tsx'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
 import { EpicProgress } from './components/progress-bar.tsx'
 import { useToast } from './components/toaster.tsx'
 import { href as iconsHref } from './components/ui/icon.tsx'
+import { SidebarProvider, SidebarTrigger } from './components/ui/sidebar.tsx'
 import { EpicToaster } from './components/ui/sonner.tsx'
 import { RootLayout } from './routes/_layout.tsx'
-import { AppSidebar } from './components/app-sidebar.tsx'
-import { SidebarProvider, SidebarTrigger } from './components/ui/sidebar.tsx'
 import {
 	useOptionalTheme,
 	useTheme,

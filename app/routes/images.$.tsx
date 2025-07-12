@@ -1,45 +1,47 @@
-import { type LoaderFunctionArgs } from '@remix-run/node'
-import { createReadStream } from 'fs'
-import { stat } from 'fs/promises'
-import { join } from 'path'
+import { createReadStream } from "fs";
+import { stat } from "fs/promises";
+import { join } from "path";
+import { type LoaderFunctionArgs } from "@remix-run/node";
 
 export async function loader({ params }: LoaderFunctionArgs) {
-  const imagePath = params['*']
+  const imagePath = params["*"];
   if (!imagePath) {
-    throw new Response('Not Found', { status: 404 })
+    throw new Response("Not Found", { status: 404 });
   }
 
   // Construct the full path
-  const baseDir = process.env.NODE_ENV === 'production' ? '/data/images' : './images'
-  const fullPath = join(baseDir, imagePath)
-  
+  const baseDir =
+    process.env.NODE_ENV === "production" ? "/data/images" : "./images";
+  const fullPath = join(baseDir, imagePath);
+
   try {
     // Check if file exists
-    const stats = await stat(fullPath)
+    const stats = await stat(fullPath);
     if (!stats.isFile()) {
-      throw new Response('Not Found', { status: 404 })
+      throw new Response("Not Found", { status: 404 });
     }
 
     // Determine content type based on extension
-    const ext = fullPath.split('.').pop()?.toLowerCase()
-    const contentType = {
-      jpg: 'image/jpeg',
-      jpeg: 'image/jpeg',
-      png: 'image/png',
-      gif: 'image/gif',
-      webp: 'image/webp',
-    }[ext || ''] || 'application/octet-stream'
+    const ext = fullPath.split(".").pop()?.toLowerCase();
+    const contentType =
+      {
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        gif: "image/gif",
+        webp: "image/webp",
+      }[ext || ""] || "application/octet-stream";
 
     // Create a read stream and return it
-    const stream = createReadStream(fullPath)
-    
+    const stream = createReadStream(fullPath);
+
     return new Response(stream as any, {
       headers: {
-        'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=31536000, immutable",
       },
-    })
-  } catch (error) {
-    throw new Response('Not Found', { status: 404 })
+    });
+  } catch {
+    throw new Response("Not Found", { status: 404 });
   }
 }
