@@ -35,7 +35,22 @@ export async function loader({ params }: LoaderFunctionArgs) {
     // Create a read stream and return it
     const stream = createReadStream(fullPath);
 
-    return new Response(stream as any, {
+    // Convert Node.js stream to Web Stream
+    const webStream = new ReadableStream({
+      start(controller) {
+        stream.on('data', (chunk) => {
+          controller.enqueue(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        stream.on('end', () => {
+          controller.close();
+        });
+        stream.on('error', (error) => {
+          controller.error(error);
+        });
+      },
+    });
+
+    return new Response(webStream, {
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "public, max-age=31536000, immutable",

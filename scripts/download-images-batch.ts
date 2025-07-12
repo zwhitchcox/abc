@@ -171,7 +171,8 @@ async function downloadAllImages() {
     process.exit(1);
   }
 
-  const config: Config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  const configData = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  const config: Config = configData as Config;
   const imagesPerItem = config.imagesPerItem || 3;
 
   // Create base images directory
@@ -255,16 +256,21 @@ async function downloadAllImages() {
 
       try {
         let itemNumber = 0;
+        const topicIndexInArray = config.topics.indexOf(topic);
         for (
           let topicIndex = 0;
-          topicIndex < config.topics.indexOf(topic);
+          topicIndex < topicIndexInArray;
           topicIndex++
         ) {
-          itemNumber += config.topics[topicIndex].items.length;
+          const topicAtIndex = config.topics[topicIndex];
+          if (topicAtIndex) {
+            itemNumber += topicAtIndex.items.length;
+          }
         }
 
         for (let i = 0; i < topic.items.length; i++) {
           const item = topic.items[i];
+          if (!item) continue;
           itemNumber++;
           await downloadImagesForItem(
             page,

@@ -19,7 +19,8 @@ function checkImages() {
     process.exit(1)
   }
   
-  const config: Config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+  const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+  const config: Config = configData as Config
   const imagesPerItem = config.imagesPerItem || 3
   const imagesBaseDir = path.join(process.cwd(), 'images')
   

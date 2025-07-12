@@ -73,7 +73,9 @@ export default function Flashcards() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          return new Set(parsed);
+          if (Array.isArray(parsed)) {
+            return new Set(parsed as string[]);
+          }
         } catch {
           // If parsing fails, use default
         }
@@ -90,7 +92,7 @@ export default function Flashcards() {
     selectedTopics.has(card.topic),
   );
 
-  const getNextIndex = useCallback(() => {
+  const getNextIndex = useCallback((): number => {
     const availableIndices = filteredFlashcards
       .map((_, index) => index)
       .filter((index) => !usedIndices.includes(index));
@@ -101,7 +103,7 @@ export default function Flashcards() {
     }
 
     const randomIndex = Math.floor(Math.random() * availableIndices.length);
-    return availableIndices[randomIndex];
+    return availableIndices[randomIndex] ?? 0;
   }, [filteredFlashcards, usedIndices]);
 
   const nextCard = useCallback(() => {
@@ -218,10 +220,12 @@ export default function Flashcards() {
   }
 
   const currentCard = filteredFlashcards[currentIndex];
-  const formattedName = currentCard.item
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  const formattedName = currentCard
+    ? currentCard.item
+        .split("-")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ")
+    : "";
 
   const toggleModal = () => setIsModalOpen((prev) => !prev);
 
@@ -315,7 +319,7 @@ export default function Flashcards() {
           style={{ maxHeight: "calc(100vh - 12rem)" }}
         >
           <img
-            src={currentCard.imagePath}
+            src={currentCard?.imagePath || ""}
             alt={formattedName}
             className="max-w-full max-h-full object-contain"
             style={{ maxHeight: "calc(100vh - 12rem)" }}
