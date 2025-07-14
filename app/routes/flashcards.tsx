@@ -20,29 +20,38 @@ type FlashcardItem = {
 
 export async function loader() {
   const flashcards: FlashcardItem[] = [];
-  const imagesDir =
-    process.env.NODE_ENV === "production" ? "/data/images" : "./images";
+  const imagesDir = process.env.IMAGES_DIR || (
+    process.env.NODE_ENV === "production" ? "/data/images" : "./images"
+  );
 
   try {
     const topics = await readdir(imagesDir);
 
     for (const topic of topics) {
+      if (topic.startsWith('.')) continue;
+      
       const topicPath = join(imagesDir, topic);
       const items = await readdir(topicPath);
 
       for (const item of items) {
+        if (item.startsWith('.')) continue;
+        
         const itemPath = join(topicPath, item);
-        const images = await readdir(itemPath);
-        const imageFiles = images.filter((img) =>
-          /\.(jpg|jpeg|png|gif|webp)$/i.test(img),
-        );
+        try {
+          const images = await readdir(itemPath);
+          const imageFiles = images.filter((img) =>
+            /\.(jpg|jpeg|png|gif|webp)$/i.test(img),
+          );
 
-        if (imageFiles.length > 0) {
-          flashcards.push({
-            topic,
-            item,
-            imagePath: `/images/${topic}/${item}/${imageFiles[0]}`,
-          });
+          if (imageFiles.length > 0) {
+            flashcards.push({
+              topic,
+              item,
+              imagePath: `/images/${topic}/${item}/${imageFiles[0]}`,
+            });
+          }
+        } catch {
+          // Skip items that can't be read
         }
       }
     }
@@ -201,20 +210,100 @@ export default function Flashcards() {
     );
   }
 
+  const toggleModal = () => setIsModalOpen((prev) => !prev);
+
   if (filteredFlashcards.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <Card className="p-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">
-            No Images in Selected Categories
-          </h2>
-          <p className="text-muted-foreground">
-            Please select at least one category in the options.
-          </p>
-          <Button onClick={() => setIsModalOpen(true)} className="mt-4">
-            Open Options
-          </Button>
-        </Card>
+      <div className="relative h-full touch-manipulation select-none">
+        <Button
+          onClick={toggleModal}
+          className="absolute right-5 top-5 z-10 px-4 py-2 text-lg"
+        >
+          Options
+        </Button>
+
+        {isModalOpen && (
+          <div
+            onClick={toggleModal}
+            className="fixed inset-0 z-20 flex items-center justify-center bg-black/50"
+          >
+            <Card
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-[90vh] max-w-3xl overflow-y-auto"
+            >
+              <CardHeader className="flex items-center justify-between">
+                <CardTitle>Options</CardTitle>
+                <Button onClick={toggleModal} variant="ghost">
+                  Close
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="font-semibold mb-3">Categories</h3>
+                    <div className="space-y-2">
+                      {allTopics.map((topic) => (
+                        <div key={topic} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`topic-${topic}`}
+                            checked={selectedTopics.has(topic)}
+                            onCheckedChange={(checked) => {
+                              const newTopics = new Set(selectedTopics);
+                              if (checked) {
+                                newTopics.add(topic);
+                              } else {
+                                newTopics.delete(topic);
+                              }
+                              setSelectedTopics(newTopics);
+                            }}
+                          />
+                          <label
+                            htmlFor={`topic-${topic}`}
+                            className="cursor-pointer capitalize"
+                          >
+                            {topic}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold mb-3">Display Options</h3>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="auto-show"
+                        checked={autoShowName}
+                        onCheckedChange={(checked) =>
+                          setAutoShowName(checked as boolean)
+                        }
+                      />
+                      <label htmlFor="auto-show" className="cursor-pointer">
+                        Always show name
+                      </label>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    Cards shown: {usedIndices.length} of{" "}
+                    {filteredFlashcards.length}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        <div className="h-full flex items-center justify-center">
+          <Card className="p-8 text-center">
+            <h2 className="text-2xl font-bold mb-4">
+              No Images in Selected Categories
+            </h2>
+            <p className="text-muted-foreground">
+              Please select at least one category in the options.
+            </p>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -226,8 +315,6 @@ export default function Flashcards() {
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ")
     : "";
-
-  const toggleModal = () => setIsModalOpen((prev) => !prev);
 
   return (
     <div className="relative h-full touch-manipulation select-none">

@@ -70,6 +70,13 @@ fi
 echo "✅ Extraction complete"
 echo ""
 
+# Clean up macOS metadata files
+echo "🧹 Cleaning up macOS metadata files..."
+flyctl ssh console -a "$APP" -C "find /data/images -name '._*' -type f -delete" 2>/dev/null
+flyctl ssh console -a "$APP" -C "find /data/images -name '.DS_Store' -type f -delete" 2>/dev/null
+echo "✅ Cleanup complete"
+echo ""
+
 # Clean up local archive
 rm -f "$ARCHIVE_NAME"
 
