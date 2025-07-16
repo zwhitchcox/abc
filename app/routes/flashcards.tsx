@@ -44,14 +44,17 @@ export async function loader() {
           );
 
           if (imageFiles.length > 0) {
-            flashcards.push({
-              topic,
-              item,
-              imagePath: `/images/${topic}/${item}/${imageFiles[0]}`,
+            // Add all available images for this item
+            imageFiles.forEach((imageFile) => {
+              flashcards.push({
+                topic,
+                item,
+                imagePath: `/images/${topic}/${item}/${imageFile}`,
+              });
             });
           }
         } catch {
-          // Skip items that can't be read
+          // Skip items that can't be read (might not be directories or might not exist)
         }
       }
     }
@@ -83,6 +86,7 @@ export default function Flashcards() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [usedIndices, setUsedIndices] = useState<number[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("flashcards-selected-topics");
@@ -127,6 +131,7 @@ export default function Flashcards() {
     setCurrentIndex(newIndex);
     setUsedIndices((prev) => [...prev, newIndex]);
     setShowName(autoShowName);
+    setImageError(false); // Reset image error for new card
   }, [getNextIndex, autoShowName]);
 
   const handleKeyPress = useCallback(
@@ -469,12 +474,23 @@ export default function Flashcards() {
           className="w-full flex-1 flex items-center justify-center overflow-hidden"
           style={{ maxHeight: "calc(100vh - 12rem)" }}
         >
-          <img
-            src={currentCard?.imagePath || ""}
-            alt={formattedName}
-            className="max-w-full max-h-full object-contain"
-            style={{ maxHeight: "calc(100vh - 12rem)" }}
-          />
+          {imageError ? (
+            <div className="text-center p-8">
+              <p className="text-2xl text-muted-foreground mb-2">Image not found</p>
+              <p className="text-sm text-muted-foreground">Press space to continue</p>
+            </div>
+          ) : (
+            <img
+              src={currentCard?.imagePath || ""}
+              alt={formattedName}
+              className="max-w-full max-h-full object-contain"
+              style={{ maxHeight: "calc(100vh - 12rem)" }}
+              onError={() => {
+                console.error(`Failed to load image: ${currentCard?.imagePath}`);
+                setImageError(true);
+              }}
+            />
+          )}
         </div>
 
         <div className="h-32 flex items-center justify-center flex-shrink-0">
