@@ -30,5 +30,3 @@ pnpm-workspace.yaml
 
 # Downloaded images
 /images
-
-images*.tar.gz
