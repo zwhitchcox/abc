@@ -73,6 +73,13 @@ export default function Flashcards() {
     }
     return false;
   });
+  const [speakName, setSpeakName] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("flashcards-speak-name");
+      return saved === "true";
+    }
+    return false;
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [usedIndices, setUsedIndices] = useState<number[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -160,6 +167,28 @@ export default function Flashcards() {
     setShowName(autoShowName);
   }, [currentIndex, autoShowName]);
 
+  // Speak the name when it's shown
+  useEffect(() => {
+    if (showName && speakName && filteredFlashcards[currentIndex]) {
+      const name = filteredFlashcards[currentIndex].item
+        .split("-")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+      
+      if ('speechSynthesis' in window) {
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
+        
+        const utterance = new SpeechSynthesisUtterance(name);
+        utterance.rate = 0.9; // Slightly slower for clarity
+        utterance.pitch = 1;
+        utterance.volume = 1;
+        
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+  }, [showName, speakName, currentIndex, filteredFlashcards]);
+
   // Reset when topics change (but not on initial mount)
   useEffect(() => {
     if (isInitialized && filteredFlashcards.length > 0) {
@@ -186,6 +215,13 @@ export default function Flashcards() {
       localStorage.setItem("flashcards-auto-show-name", String(autoShowName));
     }
   }, [autoShowName]);
+
+  // Save speak name preference
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("flashcards-speak-name", String(speakName));
+    }
+  }, [speakName]);
 
   // Initialize with random card on mount
   useEffect(() => {
@@ -270,17 +306,31 @@ export default function Flashcards() {
 
                   <div>
                     <h3 className="font-semibold mb-3">Display Options</h3>
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="auto-show"
-                        checked={autoShowName}
-                        onCheckedChange={(checked) =>
-                          setAutoShowName(checked as boolean)
-                        }
-                      />
-                      <label htmlFor="auto-show" className="cursor-pointer">
-                        Always show name
-                      </label>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="auto-show"
+                          checked={autoShowName}
+                          onCheckedChange={(checked) =>
+                            setAutoShowName(checked as boolean)
+                          }
+                        />
+                        <label htmlFor="auto-show" className="cursor-pointer">
+                          Always show name
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="speak-name"
+                          checked={speakName}
+                          onCheckedChange={(checked) =>
+                            setSpeakName(checked as boolean)
+                          }
+                        />
+                        <label htmlFor="speak-name" className="cursor-pointer">
+                          Speak name when shown
+                        </label>
+                      </div>
                     </div>
                   </div>
 
@@ -373,17 +423,31 @@ export default function Flashcards() {
 
                 <div>
                   <h3 className="font-semibold mb-3">Display Options</h3>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="auto-show"
-                      checked={autoShowName}
-                      onCheckedChange={(checked) =>
-                        setAutoShowName(checked as boolean)
-                      }
-                    />
-                    <label htmlFor="auto-show" className="cursor-pointer">
-                      Always show name
-                    </label>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="auto-show"
+                        checked={autoShowName}
+                        onCheckedChange={(checked) =>
+                          setAutoShowName(checked as boolean)
+                        }
+                      />
+                      <label htmlFor="auto-show" className="cursor-pointer">
+                        Always show name
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="speak-name"
+                        checked={speakName}
+                        onCheckedChange={(checked) =>
+                          setSpeakName(checked as boolean)
+                        }
+                      />
+                      <label htmlFor="speak-name" className="cursor-pointer">
+                        Speak name when shown
+                      </label>
+                    </div>
                   </div>
                 </div>
 
