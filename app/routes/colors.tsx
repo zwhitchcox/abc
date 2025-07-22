@@ -22,13 +22,6 @@ const colors = [
   { name: "White", hex: "#FFFFFF" },
   { name: "Gray", hex: "#808080" },
   { name: "Turquoise", hex: "#40E0D0" },
-  { name: "Navy", hex: "#000080" },
-  { name: "Lime", hex: "#32CD32" },
-  { name: "Cyan", hex: "#00FFFF" },
-  { name: "Magenta", hex: "#FF00FF" },
-  { name: "Tan", hex: "#D2B48C" },
-  { name: "Peach", hex: "#FFDAB9" },
-  { name: "Coral", hex: "#FF6F61" },
 ];
 
 type Options = {
