@@ -184,6 +184,7 @@ export default function Colors() {
   );
   const [showName, setShowName] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isSpacePressed, setIsSpacePressed] = useState<boolean>(false);
   const [remainingColors, setRemainingColors] = useState<typeof colors>([
     ...colors,
   ]);
@@ -233,8 +234,9 @@ export default function Colors() {
         return;
       }
       if (isModalOpen) return;
-      if (event.key === " ") {
+      if (event.key === " " && !isSpacePressed) {
         event.preventDefault();
+        setIsSpacePressed(true);
         if (!showName && !options.autoShowName) {
           setShowName(true);
         } else {
@@ -242,15 +244,29 @@ export default function Colors() {
         }
       }
     },
-    [showRandomColor, isModalOpen, showName, options.autoShowName],
+    [showRandomColor, isModalOpen, showName, options.autoShowName, isSpacePressed],
+  );
+
+  const handleKeyUp = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === " ") {
+        event.preventDefault();
+        setIsSpacePressed(false);
+      }
+    },
+    [],
   );
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.addEventListener("keydown", handleKeyDown);
-      return () => window.removeEventListener("keydown", handleKeyDown);
+      window.addEventListener("keyup", handleKeyUp);
+      return () => {
+        window.removeEventListener("keydown", handleKeyDown);
+        window.removeEventListener("keyup", handleKeyUp);
+      };
     }
-  }, [handleKeyDown]);
+  }, [handleKeyDown, handleKeyUp]);
 
   // Convert camelCase to Title Case
   const formatColorName = (name: string) => {
@@ -274,7 +290,6 @@ export default function Colors() {
         utterance.pitch = 1;
         utterance.volume = 1;
 
-        console.log("speaking", formattedName);
         window.speechSynthesis.speak(utterance);
       }
     }
