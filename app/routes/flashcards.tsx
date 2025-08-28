@@ -87,6 +87,7 @@ export default function Flashcards() {
   const [usedIndices, setUsedIndices] = useState<number[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("flashcards-selected-topics");
@@ -142,8 +143,9 @@ export default function Flashcards() {
       }
       if (isModalOpen) return;
 
-      if (e.code === "Space") {
+      if (e.code === "Space" && !isSpacePressed) {
         e.preventDefault();
+        setIsSpacePressed(true);
         if (!showName && !autoShowName) {
           setShowName(true);
         } else {
@@ -151,7 +153,17 @@ export default function Flashcards() {
         }
       }
     },
-    [showName, autoShowName, nextCard, isModalOpen],
+    [showName, autoShowName, nextCard, isModalOpen, isSpacePressed],
+  );
+
+  const handleKeyUp = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        setIsSpacePressed(false);
+      }
+    },
+    [],
   );
 
   const handleClick = useCallback(() => {
@@ -165,8 +177,12 @@ export default function Flashcards() {
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyPress);
-    return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [handleKeyPress]);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyPress);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [handleKeyPress, handleKeyUp]);
 
   useEffect(() => {
     setShowName(autoShowName);
