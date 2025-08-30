@@ -22,6 +22,7 @@ type Options = {
   isUpperCase: boolean;
   isSoundEnabled: boolean;
   isAccumulateMode: boolean;
+  pronounceOnAdvance: boolean;
 };
 
 export default function Index() {
@@ -32,10 +33,13 @@ export default function Index() {
     isUpperCase: false,
     isSoundEnabled: false,
     isAccumulateMode: false,
+    pronounceOnAdvance: false,
   });
   const [currentCharacter, setCurrentCharacter] = useState<string>("");
   const [accumulatedText, setAccumulatedText] = useState<string>("");
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [hasPronouncedCurrent, setHasPronouncedCurrent] =
+    useState<boolean>(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const playAudioForLetter = useCallback((letter: string) => {
@@ -52,6 +56,20 @@ export default function Index() {
 
   const showRandomCharacter = useCallback(() => {
     if (isModalOpen || isAudioPlaying()) return;
+
+    // If pronounceOnAdvance is enabled and we have a current character that hasn't been pronounced yet
+    if (
+      options.pronounceOnAdvance &&
+      options.isSoundEnabled &&
+      currentCharacter &&
+      /^[A-Za-z]$/.test(currentCharacter) &&
+      !hasPronouncedCurrent
+    ) {
+      // Pronounce the current character and mark it as pronounced
+      void playAudioForLetter(currentCharacter);
+      setHasPronouncedCurrent(true);
+      return; // Don't advance to next character yet
+    }
 
     const availableChars: string[] = [];
     if (options.isLettersEnabled) {
@@ -72,13 +90,29 @@ export default function Index() {
       return;
     }
 
-    let randomChar =
-      availableChars[Math.floor(Math.random() * availableChars.length)] || "";
+    let randomChar;
+
+    // If we have more than one available character, ensure we don't repeat the same one
+    if (availableChars.length > 1 && currentCharacter) {
+      const filteredChars = availableChars.filter((char) => {
+        const compareChar = options.isUpperCase ? char : char.toLowerCase();
+        return compareChar !== currentCharacter;
+      });
+      randomChar =
+        filteredChars[Math.floor(Math.random() * filteredChars.length)] || "";
+    } else {
+      randomChar =
+        availableChars[Math.floor(Math.random() * availableChars.length)] || "";
+    }
+
     if (!options.isUpperCase) {
       randomChar = randomChar.toLowerCase();
     }
     setCurrentCharacter(randomChar);
-    if (options.isSoundEnabled) {
+    setHasPronouncedCurrent(false); // Reset pronunciation state for new character
+
+    // Only play immediately if not using pronounceOnAdvance mode
+    if (options.isSoundEnabled && !options.pronounceOnAdvance) {
       void playAudioForLetter(randomChar);
     }
   }, [
@@ -88,6 +122,9 @@ export default function Index() {
     isModalOpen,
     options.isUpperCase,
     options.isSoundEnabled,
+    options.pronounceOnAdvance,
+    currentCharacter,
+    hasPronouncedCurrent,
     playAudioForLetter,
     isAudioPlaying,
   ]);
@@ -121,6 +158,7 @@ export default function Index() {
             isUpperCase: parsed.isUpperCase || false,
             isSoundEnabled: parsed.isSoundEnabled || false,
             isAccumulateMode: parsed.isAccumulateMode || false,
+            pronounceOnAdvance: parsed.pronounceOnAdvance || false,
           });
         } else {
           setOptions(parsed as Options);
@@ -208,6 +246,21 @@ export default function Index() {
           if (options.enabledCharacters && !options.enabledCharacters[key]) {
             return;
           }
+
+          // If pronounceOnAdvance is enabled and we have a current character that hasn't been pronounced yet
+          if (
+            options.pronounceOnAdvance &&
+            options.isSoundEnabled &&
+            currentCharacter &&
+            /^[A-Za-z]$/.test(currentCharacter) &&
+            !hasPronouncedCurrent &&
+            !options.isAccumulateMode
+          ) {
+            void playAudioForLetter(currentCharacter);
+            setHasPronouncedCurrent(true);
+            return; // Don't advance to next character yet
+          }
+
           if (!options.isUpperCase) {
             key = key.toLowerCase();
           }
@@ -215,8 +268,14 @@ export default function Index() {
             setAccumulatedText((prev) => prev + key);
           } else {
             setCurrentCharacter(key);
+            setHasPronouncedCurrent(false); // Reset pronunciation state for new character
           }
-          if (options.isSoundEnabled) {
+
+          // Only play immediately if not using pronounceOnAdvance mode or if in accumulate mode
+          if (
+            options.isSoundEnabled &&
+            (!options.pronounceOnAdvance || options.isAccumulateMode)
+          ) {
             void playAudioForLetter(key);
           }
         }
@@ -231,6 +290,9 @@ export default function Index() {
       options.isUpperCase,
       options.isSoundEnabled,
       options.isAccumulateMode,
+      options.pronounceOnAdvance,
+      currentCharacter,
+      hasPronouncedCurrent,
       playAudioForLetter,
       isAudioPlaying,
     ],
@@ -450,6 +512,22 @@ function OptionsComponent({
             }
           />
           <span>Enable Sound</span>
+        </label>
+        <label className="flex items-center space-x-2">
+          <Checkbox
+            checked={options.pronounceOnAdvance}
+            onCheckedChange={() =>
+              setOptions((prev) => ({
+                ...prev,
+                pronounceOnAdvance: !prev.pronounceOnAdvance,
+              }))
+            }
+            disabled={!options.isSoundEnabled}
+          />
+          <span>
+            Pronounce on advance (show letter first, then pronounce when
+            advancing)
+          </span>
         </label>
         <label className="flex items-center space-x-2">
           <Checkbox
