@@ -41,6 +41,9 @@ export default function Index() {
   const [hasPronouncedCurrent, setHasPronouncedCurrent] =
     useState<boolean>(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(
+    null,
+  );
 
   const playAudioForLetter = useCallback((letter: string) => {
     if (audioRef.current) {
@@ -128,6 +131,44 @@ export default function Index() {
     playAudioForLetter,
     isAudioPlaying,
   ]);
+
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (isModalOpen) return;
+      const touch = e.touches[0];
+      if (touch) {
+        setTouchStart({ x: touch.clientX, y: touch.clientY });
+      }
+    },
+    [isModalOpen],
+  );
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (isModalOpen || !touchStart) return;
+
+      const touch = e.changedTouches[0];
+      if (touch) {
+        const deltaX = touch.clientX - touchStart.x;
+        const deltaY = touch.clientY - touchStart.y;
+
+        // Minimum swipe distance (in pixels)
+        const minSwipeDistance = 50;
+
+        // Check for swipe up (negative Y direction) or swipe right (positive X direction)
+        if (
+          (Math.abs(deltaY) > Math.abs(deltaX) && deltaY < -minSwipeDistance) ||
+          (Math.abs(deltaX) > Math.abs(deltaY) && deltaX > minSwipeDistance)
+        ) {
+          // Swipe up or swipe right detected - advance to next letter
+          showRandomCharacter();
+        }
+      }
+
+      setTouchStart(null);
+    },
+    [isModalOpen, touchStart, showRandomCharacter],
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -341,6 +382,8 @@ export default function Index() {
       )}
       <div
         onClick={showRandomCharacter}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         className="flex h-full items-center justify-center"
       >
         {options.isAccumulateMode ? (
