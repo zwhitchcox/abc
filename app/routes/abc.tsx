@@ -1,4 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { existsSync } from "fs";
+import { join } from "path";
+import { json } from "@remix-run/node";
+import { useLoaderData } from "@remix-run/react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Button } from "#app/components/ui/button";
 import {
   Card,
@@ -15,6 +19,65 @@ const vowels = ["A", "E", "I", "O", "U"];
 const consonants = allLetters.filter((letter) => !vowels.includes(letter));
 const wideCharacters = ["W", "M", "w", "m"];
 
+// Simple short words for spelling practice (no digraphs - single letter sounds only)
+const spellWords = [
+  "cat",
+  "dog",
+  "sun",
+  "run",
+  "fun",
+  "big",
+  "red",
+  "bad",
+  "sad",
+  "mad",
+  "bat",
+  "hat",
+  "rat",
+  "fat",
+  "bed",
+  "leg",
+  "pet",
+  "net",
+  "wet",
+  "get",
+  "bit",
+  "hit",
+  "sit",
+  "fit",
+  "hot",
+  "pot",
+  "cot",
+  "got",
+  "but",
+  "cut",
+  "nut",
+  "hut",
+  "bug",
+  "hug",
+  "rug",
+  "dug",
+  "log",
+  "fog",
+  "hog",
+  "jog",
+];
+
+export async function loader() {
+  // Check which word audio files are available
+  const availableWords: string[] = [];
+
+  for (const word of spellWords) {
+    const filePath = join(process.cwd(), "public", "words", `${word}.wav`);
+    if (existsSync(filePath)) {
+      availableWords.push(word);
+    }
+    console.log(filePath);
+  }
+
+  return json({ availableWords });
+}
+
 type Options = {
   isLettersEnabled: boolean;
   isNumbersEnabled: boolean;
@@ -23,9 +86,12 @@ type Options = {
   isSoundEnabled: boolean;
   isAccumulateMode: boolean;
   pronounceOnAdvance: boolean;
+  isSpellMode: boolean;
 };
 
 export default function Index() {
+  const { availableWords } = useLoaderData<typeof loader>();
+  console.log(availableWords);
   const [options, setOptions] = useState<Options>({
     isLettersEnabled: true,
     isNumbersEnabled: false,
@@ -34,6 +100,7 @@ export default function Index() {
     isSoundEnabled: false,
     isAccumulateMode: false,
     pronounceOnAdvance: false,
+    isSpellMode: false,
   });
   const [currentCharacter, setCurrentCharacter] = useState<string>("");
   const [accumulatedText, setAccumulatedText] = useState<string>("");
@@ -44,6 +111,12 @@ export default function Index() {
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(
     null,
   );
+  const [currentWord, setCurrentWord] = useState<string>("");
+  const [currentWordIndex, setCurrentWordIndex] = useState<number>(0);
+  const [spellingPhase, setSpellingPhase] = useState<
+    "show_word" | "spell_letters" | "pronounce_word"
+  >("show_word");
+  const [hasPronouncedWord, setHasPronouncedWord] = useState<boolean>(false);
 
   const playAudioForLetter = useCallback((letter: string) => {
     if (audioRef.current) {
@@ -53,9 +126,119 @@ export default function Index() {
     return Promise.resolve();
   }, []);
 
+  const speakWord = useCallback(
+    (word: string) => {
+      const wordLower = word.toLowerCase();
+
+      // Try to use audio file first
+      if (availableWords.includes(wordLower) && audioRef.current) {
+        audioRef.current.src = `/letters/${wordLower}.wav`;
+        void audioRef.current.play();
+        return Promise.resolve();
+      }
+
+      // Fall back to speech synthesis
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(wordLower);
+        utterance.rate = 0.8;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+        window.speechSynthesis.speak(utterance);
+      }
+
+      return Promise.resolve();
+    },
+    [availableWords],
+  );
+
   const isAudioPlaying = useCallback(() => {
     return audioRef.current && !audioRef.current.paused;
   }, []);
+
+  const handleSpellMode = useCallback(() => {
+    if (isModalOpen || isAudioPlaying()) return;
+
+    if (spellingPhase === "show_word") {
+      // Show the word first, then move to spelling phase
+      setSpellingPhase("spell_letters");
+      setCurrentWordIndex(0);
+      setHasPronouncedCurrent(false);
+      return;
+    }
+
+    if (spellingPhase === "spell_letters") {
+      const word = currentWord;
+
+      // If we haven't pronounced the current letter yet and pronounceOnAdvance is enabled
+      if (
+        options.pronounceOnAdvance &&
+        options.isSoundEnabled &&
+        currentWordIndex < word.length &&
+        !hasPronouncedCurrent
+      ) {
+        const currentLetter = word[currentWordIndex];
+        if (currentLetter) {
+          void playAudioForLetter(currentLetter);
+        }
+        setHasPronouncedCurrent(true);
+        return;
+      }
+
+      // Move to next letter
+      const nextIndex = currentWordIndex + 1;
+      if (nextIndex < word.length) {
+        setCurrentWordIndex(nextIndex);
+        setHasPronouncedCurrent(false);
+        // If not using pronounceOnAdvance, play the letter immediately
+        if (options.isSoundEnabled && !options.pronounceOnAdvance) {
+          const nextLetter = word[nextIndex];
+          if (nextLetter) {
+            void playAudioForLetter(nextLetter);
+          }
+        }
+      } else {
+        // Finished spelling, move to pronounce word phase
+        setSpellingPhase("pronounce_word");
+        setHasPronouncedWord(false);
+      }
+      return;
+    }
+
+    if (spellingPhase === "pronounce_word") {
+      if (!hasPronouncedWord) {
+        // Pronounce the complete word
+        if (options.isSoundEnabled) {
+          void speakWord(currentWord);
+        }
+        setHasPronouncedWord(true);
+        return;
+      } else {
+        // Move to next word
+        const randomWord =
+          spellWords[Math.floor(Math.random() * spellWords.length)];
+        if (randomWord) {
+          setCurrentWord(randomWord);
+          setSpellingPhase("show_word");
+          setCurrentWordIndex(0);
+          setHasPronouncedWord(false);
+          setHasPronouncedCurrent(false);
+        }
+      }
+    }
+  }, [
+    isModalOpen,
+    isAudioPlaying,
+    spellingPhase,
+    currentWord,
+    currentWordIndex,
+    hasPronouncedCurrent,
+    hasPronouncedWord,
+    options.pronounceOnAdvance,
+    options.isSoundEnabled,
+    playAudioForLetter,
+    speakWord,
+  ]);
 
   const showRandomCharacter = useCallback(() => {
     if (isModalOpen || isAudioPlaying()) return;
@@ -143,6 +326,14 @@ export default function Index() {
     [isModalOpen],
   );
 
+  const handleAdvance = useCallback(() => {
+    if (options.isSpellMode) {
+      handleSpellMode();
+    } else {
+      showRandomCharacter();
+    }
+  }, [options.isSpellMode, handleSpellMode, showRandomCharacter]);
+
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
       if (isModalOpen || !touchStart) return;
@@ -160,14 +351,14 @@ export default function Index() {
           (Math.abs(deltaY) > Math.abs(deltaX) && deltaY < -minSwipeDistance) ||
           (Math.abs(deltaX) > Math.abs(deltaY) && deltaX > minSwipeDistance)
         ) {
-          // Swipe up or swipe right detected - advance to next letter
-          showRandomCharacter();
+          // Swipe up or swipe right detected - advance
+          handleAdvance();
         }
       }
 
       setTouchStart(null);
     },
-    [isModalOpen, touchStart, showRandomCharacter],
+    [isModalOpen, touchStart, handleAdvance],
   );
 
   useEffect(() => {
@@ -200,6 +391,7 @@ export default function Index() {
             isSoundEnabled: parsed.isSoundEnabled || false,
             isAccumulateMode: parsed.isAccumulateMode || false,
             pronounceOnAdvance: parsed.pronounceOnAdvance || false,
+            isSpellMode: parsed.isSpellMode || false,
           });
         } else {
           setOptions(parsed as Options);
@@ -227,6 +419,21 @@ export default function Index() {
     }
   }, [options]);
 
+  // Initialize spell mode with first word
+  useEffect(() => {
+    if (options.isSpellMode && !currentWord) {
+      const randomWord =
+        spellWords[Math.floor(Math.random() * spellWords.length)];
+      if (randomWord) {
+        setCurrentWord(randomWord);
+        setSpellingPhase("show_word");
+        setCurrentWordIndex(0);
+        setHasPronouncedWord(false);
+        setHasPronouncedCurrent(false);
+      }
+    }
+  }, [options.isSpellMode, currentWord]);
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (event.key === "Escape" && isModalOpen) {
@@ -239,7 +446,7 @@ export default function Index() {
         if (options.isAccumulateMode) {
           setAccumulatedText((prev) => prev + " ");
         } else {
-          showRandomCharacter();
+          handleAdvance();
         }
       } else if (event.key === "Tab" && !event.shiftKey) {
         event.preventDefault();
@@ -323,7 +530,7 @@ export default function Index() {
       }
     },
     [
-      showRandomCharacter,
+      handleAdvance,
       options.isLettersEnabled,
       options.isNumbersEnabled,
       options.enabledCharacters,
@@ -381,12 +588,49 @@ export default function Index() {
         </div>
       )}
       <div
-        onClick={showRandomCharacter}
+        onClick={handleAdvance}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         className="flex h-full items-center justify-center"
       >
-        {options.isAccumulateMode ? (
+        {options.isSpellMode ? (
+          <div className="text-center">
+            {spellingPhase === "show_word" ||
+            spellingPhase === "pronounce_word" ? (
+              <span
+                style={{
+                  fontSize: "20vh",
+                  lineHeight: "1",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                {currentWord}
+              </span>
+            ) : (
+              <div>
+                <div
+                  style={{
+                    fontSize: "15vh",
+                    lineHeight: "1",
+                    letterSpacing: "0.1em",
+                    opacity: 0.3,
+                  }}
+                >
+                  {currentWord}
+                </div>
+                <div
+                  style={{
+                    fontSize: "30vh",
+                    lineHeight: "1",
+                    marginTop: "2vh",
+                  }}
+                >
+                  {currentWord[currentWordIndex] || ""}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : options.isAccumulateMode ? (
           <span
             style={{
               fontSize: "20vh",
@@ -583,6 +827,18 @@ function OptionsComponent({
             }
           />
           <span>Word Mode (Tab to toggle)</span>
+        </label>
+        <label className="flex items-center space-x-2">
+          <Checkbox
+            checked={options.isSpellMode}
+            onCheckedChange={() =>
+              setOptions((prev) => ({
+                ...prev,
+                isSpellMode: !prev.isSpellMode,
+              }))
+            }
+          />
+          <span>Spell Mode (spell out words letter by letter)</span>
         </label>
       </div>
 
