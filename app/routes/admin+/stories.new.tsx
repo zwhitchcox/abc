@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, execSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
@@ -14,6 +14,8 @@ import {
 } from '@remix-run/node'
 import { Form, useActionData } from '@remix-run/react'
 import ffprobeStatic from 'ffprobe-static'
+import { useState } from 'react'
+import YtDlpWrap from 'yt-dlp-wrap'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { Button } from '#app/components/ui/button.tsx'
 import { Label } from '#app/components/ui/label.tsx'
@@ -61,6 +63,31 @@ function probe(filePath: string): Promise<any> {
     })
 }
 
+function normalizeTime(time: string): string {
+    time = time.trim()
+    if (time.startsWith(':')) {
+        return '0' + time
+    }
+    return time
+}
+
+async function ensureYtDlp() {
+    try {
+        // Check if yt-dlp is in PATH
+        execSync('which yt-dlp', { stdio: 'ignore' })
+        return 'yt-dlp'
+    } catch {
+        const binaryPath = path.join(process.cwd(), 'bin', 'yt-dlp')
+        if (!fs.existsSync(binaryPath)) {
+            console.log('Downloading yt-dlp binary to', binaryPath)
+            await fs.promises.mkdir(path.dirname(binaryPath), { recursive: true })
+            await YtDlpWrap.downloadFromGithub(binaryPath)
+            await fs.promises.chmod(binaryPath, '755')
+        }
+        return binaryPath
+    }
+}
+
 export async function action({ request }: ActionFunctionArgs) {
 	await requireUserWithRole(request, 'admin')
 
@@ -96,6 +123,119 @@ export async function action({ request }: ActionFunctionArgs) {
 		uploadHandler
 	)
 
+    const storyType = formData.get('storyType')
+
+    if (storyType === 'readaloud') {
+        const youtubeUrl = formData.get('youtubeUrl')
+        if (typeof youtubeUrl !== 'string' || !youtubeUrl) {
+             return json({ error: 'YouTube URL is required' }, { status: 400 })
+        }
+
+        let startTime = formData.get('startTime') as string
+        let endTime = formData.get('endTime') as string
+
+        if (startTime) startTime = normalizeTime(startTime)
+        if (endTime) endTime = normalizeTime(endTime)
+
+        const storageDir = process.env.STORAGE_DIR || path.join(process.cwd(), 'data', 'uploads', 'audiobooks')
+        await fs.promises.mkdir(storageDir, { recursive: true })
+
+        const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(7)}`
+        const outputBase = path.join(storageDir, uniqueFilename)
+        const outputPath = outputBase + '.mp4'
+
+        try {
+            const binaryPath = await ensureYtDlp()
+            const ytDlpWrap = new YtDlpWrap(binaryPath)
+
+            const args = [
+                youtubeUrl,
+                '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                '--merge-output-format', 'mp4',
+                '-o', outputPath,
+                '--add-metadata',
+                '--write-thumbnail',
+                '--convert-thumbnails', 'jpg'
+            ]
+
+            if (startTime || endTime) {
+                 const section = `*${startTime || ''}-${endTime || ''}`
+                 args.push('--download-sections', section)
+                 args.push('--force-keyframes-at-cuts')
+            }
+
+            console.log('Executing yt-dlp with args:', args)
+            await ytDlpWrap.execPromise(args)
+
+            // Check for thumbnail
+            let coverBlob = null
+            let coverContentType = 'image/jpeg'
+            const potentialExts = ['.jpg', '.jpeg', '.webp', '.png']
+
+            for (const ext of potentialExts) {
+                 const thumbPath = outputBase + ext
+                 if (fs.existsSync(thumbPath)) {
+                     coverBlob = await fs.promises.readFile(thumbPath)
+                     coverContentType = ext === '.webp' ? 'image/webp' : (ext === '.png' ? 'image/png' : 'image/jpeg')
+                     // Clean up thumb file
+                     await fs.promises.unlink(thumbPath)
+                     break
+                 }
+            }
+
+            // Probe for metadata (duration, title)
+            let duration = 0
+            let title = formData.get('title') as string
+
+            try {
+                const info = await probe(outputPath)
+                duration = info.format?.duration || 0
+                if (!title && info.format?.tags?.title) title = info.format.tags.title
+            } catch (e) {
+                console.error('Probing downloaded file failed:', e)
+            }
+
+            if (!title) title = 'Downloaded Video'
+
+            // Create DB entry
+            await prisma.story.create({
+                data: {
+                    title,
+                    type: 'readaloud',
+                    originalLink: youtubeUrl as string,
+                    images: coverBlob ? {
+                        create: {
+                            contentType: coverContentType,
+                            blob: coverBlob,
+                            altText: title,
+                        }
+                    } : undefined,
+                    audio: {
+                        create: {
+                            contentType: 'video/mp4',
+                            filepath: outputPath,
+                        }
+                    },
+                    chapters: {
+                        create: {
+                            title: 'Full Video',
+                            order: 0,
+                            startTime: 0,
+                            endTime: parseFloat(String(duration)),
+                        }
+                    }
+                }
+            })
+
+            return redirect(`/admin/stories`)
+
+        } catch (e: any) {
+            console.error('Download failed:', e)
+            return json({ error: `Download failed: ${e.message}` }, { status: 500 })
+        }
+    }
+
+    // Audiobook Handling
 	const filepath = formData.get('audiobookFile')
 
 	if (typeof filepath !== 'string' || !filepath) {
@@ -118,6 +258,7 @@ export async function action({ request }: ActionFunctionArgs) {
 	const story = await prisma.story.create({
 		data: {
 			title,
+            type: 'audiobook',
 			images: coverPicture ? {
 				create: {
 					contentType: coverPicture.format,
@@ -176,6 +317,7 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function NewStory() {
 	const actionData = useActionData<typeof action>()
 	const isPending = useIsPending()
+    const [storyType, setStoryType] = useState<'audiobook' | 'readaloud'>('audiobook')
 
 	const [form] = useForm({
 		id: 'story-editor',
@@ -184,7 +326,7 @@ export default function NewStory() {
 
 	return (
 		<div className="container mx-auto p-6">
-			<h1 className="mb-6 text-2xl font-bold">Upload Audiobook (M4B, MP3)</h1>
+			<h1 className="mb-6 text-2xl font-bold">Add New Story</h1>
 			<FormProvider context={form.context}>
 				<Form
 					method="POST"
@@ -192,22 +334,99 @@ export default function NewStory() {
 					{...getFormProps(form)}
 					encType="multipart/form-data"
 				>
-					<div>
-						<Label htmlFor="audiobookFile">Audiobook File (.m4b, .mp3)</Label>
-						<input
-							id="audiobookFile"
-							name="audiobookFile"
-							type="file"
-							accept=".m4b,.mp3,audio/*"
-							required
-							className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
-						/>
-						{actionData?.error && (
-							<div className="min-h-[32px] px-4 pb-3 pt-1">
-								<p className="text-sm text-red-500">{actionData.error}</p>
-							</div>
-						)}
-					</div>
+                    <div>
+                        <Label>Story Type</Label>
+                        <div className="flex gap-4 mt-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name="storyType"
+                                    value="audiobook"
+                                    checked={storyType === 'audiobook'}
+                                    onChange={() => setStoryType('audiobook')}
+                                    className="w-4 h-4 text-orange-600"
+                                />
+                                Audiobook (M4B/MP3)
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name="storyType"
+                                    value="readaloud"
+                                    checked={storyType === 'readaloud'}
+                                    onChange={() => setStoryType('readaloud')}
+                                    className="w-4 h-4 text-orange-600"
+                                />
+                                Read Aloud (YouTube)
+                            </label>
+                        </div>
+                    </div>
+
+                    {storyType === 'audiobook' ? (
+                        <div>
+                            <Label htmlFor="audiobookFile">Audiobook File (.m4b, .mp3)</Label>
+                            <input
+                                id="audiobookFile"
+                                name="audiobookFile"
+                                type="file"
+                                accept=".m4b,.mp3,audio/*"
+                                required
+                                className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
+                            />
+                        </div>
+                    ) : (
+                        <>
+                            <div>
+                                <Label htmlFor="youtubeUrl">YouTube URL</Label>
+                                <input
+                                    id="youtubeUrl"
+                                    name="youtubeUrl"
+                                    type="url"
+                                    required
+                                    placeholder="https://www.youtube.com/watch?v=..."
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                />
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <Label htmlFor="startTime">Start Time (Optional, MM:SS or SS)</Label>
+                                    <input
+                                        id="startTime"
+                                        name="startTime"
+                                        type="text"
+                                        placeholder="0:00"
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <Label htmlFor="endTime">End Time (Optional, MM:SS or SS)</Label>
+                                    <input
+                                        id="endTime"
+                                        name="endTime"
+                                        type="text"
+                                        placeholder="10:00"
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <Label htmlFor="title">Title (Optional)</Label>
+                                <input
+                                    id="title"
+                                    name="title"
+                                    type="text"
+                                    placeholder="My Custom Title"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                />
+                            </div>
+                        </>
+                    )}
+
+					{actionData?.error && (
+						<div className="min-h-[32px] px-4 pb-3 pt-1">
+							<p className="text-sm text-red-500">{actionData.error}</p>
+						</div>
+					)}
 
 					<div className="flex justify-end gap-4">
 						<Button type="reset" variant="secondary">
@@ -218,7 +437,7 @@ export default function NewStory() {
 							disabled={isPending}
 							status={isPending ? 'pending' : 'idle'}
 						>
-							Upload & Process
+							{storyType === 'audiobook' ? 'Upload & Process' : 'Download & Add'}
 						</StatusButton>
 					</div>
 				</Form>

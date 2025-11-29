@@ -183,10 +183,12 @@ model Connection {
 }
 
 model Story {
-  id        String   @id @default(cuid())
-  title     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  title        String
+  type         String   @default("audiobook")
+  originalLink String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   images   StoryImage[]
   chapters Chapter[]

@@ -25,6 +25,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		select: {
 			id: true,
 			title: true,
+            type: true,
 			images: {
 				select: {
 					id: true,
@@ -35,6 +36,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 			audio: {
 				select: {
 					id: true,
+                    contentType: true,
 				},
 			},
 			chapters: {
@@ -120,7 +122,7 @@ export default function StoryPlayer() {
     // Secret menu trigger state
     const [, setTitleTapCount] = useState(0)
 
-	const audioRef = useRef<HTMLAudioElement>(null)
+	const mediaRef = useRef<HTMLMediaElement>(null)
 
     // Track previous chapter index to detect actual changes
     const prevChapterIndexRef = useRef(progress?.currentChapterIndex ?? 0)
@@ -133,6 +135,8 @@ export default function StoryPlayer() {
     const showFullControls = parentSettings?.showFullControls ?? false
 
     const chapterDuration = currentChapter ? (currentChapter.endTime ?? 0) - currentChapter.startTime : 0
+
+    const isVideo = story.audio?.contentType?.startsWith('video/')
 
     // Secret menu trigger
     const handleTitleClick = () => {
@@ -150,21 +154,21 @@ export default function StoryPlayer() {
 
 	// Effect to handle play/pause
 	useEffect(() => {
-		if (audioRef.current) {
+		if (mediaRef.current) {
 			if (isPlaying) {
-				audioRef.current.play().catch(console.error)
+				mediaRef.current.play().catch(console.error)
 			} else {
-				audioRef.current.pause()
+				mediaRef.current.pause()
 			}
 		}
 	}, [isPlaying])
 
     // Effect: Restore Progress ONCE
 	useEffect(() => {
-		if (audioRef.current && progress && !hasRestored) {
+		if (mediaRef.current && progress && !hasRestored) {
             const time = progress.currentTime
             if (time > 0) {
-                audioRef.current.currentTime = time
+                mediaRef.current.currentTime = time
             }
             setHasRestored(true)
 		} else if (!progress && !hasRestored) {
@@ -177,8 +181,8 @@ export default function StoryPlayer() {
         if (!hasRestored) return // Wait for restoration first
 
         if (prevChapterIndexRef.current !== currentChapterIndex) {
-             if (audioRef.current && currentChapter) {
-                 audioRef.current.currentTime = currentChapter.startTime
+             if (mediaRef.current && currentChapter) {
+                 mediaRef.current.currentTime = currentChapter.startTime
              }
              prevChapterIndexRef.current = currentChapterIndex
              // Reset progress bar visual
@@ -189,8 +193,8 @@ export default function StoryPlayer() {
 
     // Save progress function
     const saveProgress = () => {
-        if (audioRef.current && story.id) {
-            const time = audioRef.current.currentTime
+        if (mediaRef.current && story.id) {
+            const time = mediaRef.current.currentTime
             fetcher.submit({
                 currentChapterIndex: String(currentChapterIndex),
                 currentTime: String(time)
@@ -215,12 +219,12 @@ export default function StoryPlayer() {
             setIsPlaying(false)
         } else {
             // Check if we are at the end of the chapter and need to advance manually
-            if (audioRef.current && currentChapter && currentChapter.endTime && audioRef.current.currentTime >= currentChapter.endTime - 0.5) {
+            if (mediaRef.current && currentChapter && currentChapter.endTime && mediaRef.current.currentTime >= currentChapter.endTime - 0.5) {
                 if (hasNextChapter) {
                     setSessionChaptersPlayed(0)
                     nextChapter()
                 } else {
-                    audioRef.current.currentTime = currentChapter.startTime
+                    mediaRef.current.currentTime = currentChapter.startTime
                     setIsPlaying(true)
                 }
             } else {
@@ -247,40 +251,81 @@ export default function StoryPlayer() {
 
     const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
         const seekTime = Number(e.target.value)
-        if (audioRef.current && currentChapter) {
+        if (mediaRef.current && currentChapter) {
             const newTime = currentChapter.startTime + seekTime
-            audioRef.current.currentTime = newTime
+            mediaRef.current.currentTime = newTime
             setCurrentProgress(seekTime)
         }
     }
 
 	const onTimeUpdate = () => {
-		if (!audioRef.current || !currentChapter) return
+		if (!mediaRef.current || !currentChapter) return
 
         // Update progress bar state
-        const relativeTime = audioRef.current.currentTime - currentChapter.startTime
+        const relativeTime = mediaRef.current.currentTime - currentChapter.startTime
         // Clamp to 0 and duration
         const clampedTime = Math.max(0, Math.min(relativeTime, chapterDuration))
         setCurrentProgress(clampedTime)
 
 		// Check if we passed the end of the current chapter
-		if (currentChapter.endTime && audioRef.current.currentTime >= currentChapter.endTime) {
+		if (currentChapter.endTime && mediaRef.current.currentTime >= currentChapter.endTime) {
             const newSessionCount = sessionChaptersPlayed + 1
             setSessionChaptersPlayed(newSessionCount)
 
             if (newSessionCount >= maxChaptersToPlay) {
                 setIsPlaying(false)
-                audioRef.current.pause()
+                mediaRef.current.pause()
             } else if (hasNextChapter) {
                 nextChapter()
             } else {
                 setIsPlaying(false)
-                audioRef.current.pause()
+                mediaRef.current.pause()
             }
             saveProgress()
 		}
 	}
 
+    // Render Video Player
+    if (isVideo) {
+        return (
+            <div className="flex min-h-screen flex-col bg-black text-white">
+                {/* Header Overlay */}
+                <div className="absolute top-0 left-0 right-0 z-50 flex items-center p-4 bg-gradient-to-b from-black/70 to-transparent">
+                    <Link
+                        to="/stories"
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 backdrop-blur-md hover:bg-white/30 transition-colors"
+                    >
+                        <Icon name="arrow-left" className="h-6 w-6 text-white" />
+                        <span className="sr-only">Back</span>
+                    </Link>
+                    <h1
+                        className="ml-4 text-lg font-bold text-white drop-shadow-md cursor-pointer select-none"
+                        onClick={handleTitleClick}
+                    >
+                        {story.title}
+                    </h1>
+                </div>
+
+                {/* Main Video Area */}
+                <div className="flex-1 flex items-center justify-center relative">
+                    {story.audio?.id && (
+                        <video
+                            ref={mediaRef as React.RefObject<HTMLVideoElement>}
+                            src={`/resources/audio-files/${story.audio.id}`}
+                            onTimeUpdate={onTimeUpdate}
+                            controls // Use native controls for video
+                            className="max-w-full max-h-screen w-full aspect-video"
+                            playsInline
+                            onPlay={() => setIsPlaying(true)}
+                            onPause={() => setIsPlaying(false)}
+                        />
+                    )}
+                </div>
+            </div>
+        )
+    }
+
+    // Render Audiobook Player
 	return (
 		<div className="flex min-h-screen flex-col bg-orange-50 dark:bg-stone-950 transition-colors">
 			{/* Header */}
@@ -442,7 +487,7 @@ export default function StoryPlayer() {
 
 				{story.audio?.id && (
 					<audio
-						ref={audioRef}
+						ref={mediaRef as React.RefObject<HTMLAudioElement>}
 						src={`/resources/audio-files/${story.audio.id}`}
 						onTimeUpdate={onTimeUpdate}
 						controls={false}

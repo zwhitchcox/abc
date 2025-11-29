@@ -4,7 +4,10 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 # Install openssl for Prisma, sqlite3, and build dependencies for better-sqlite3
-RUN apt-get update && apt-get install -y openssl ca-certificates sqlite3 python3 make gcc g++ ffmpeg && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y openssl ca-certificates sqlite3 python3 make gcc g++ ffmpeg curl && \
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
+    chmod a+rx /usr/local/bin/yt-dlp && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /myapp
 

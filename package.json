@@ -115,6 +115,7 @@
     "tailwindcss-animate": "^1.0.7",
     "tailwindcss-radix": "^3.0.5",
     "vite-env-only": "^3.0.3",
+    "yt-dlp-wrap": "^2.3.12",
     "zod": "^3.23.8"
   },
   "devDependencies": {
