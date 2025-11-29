@@ -44,4 +44,4 @@ ENV STORAGE_DIR="/data/uploads"
 RUN mkdir -p /data
 WORKDIR /myapp
 ADD . .
-CMD ["npm", "run", "start"]
+CMD ["sh", "-c", "npx prisma db push && npm run start"]
