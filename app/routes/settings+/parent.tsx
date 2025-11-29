@@ -1,12 +1,13 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/node'
 import { Form, useLoaderData, Link } from '@remix-run/react'
+import { Button } from '#app/components/ui/button.tsx'
+import { Checkbox } from '#app/components/ui/checkbox.tsx'
+import { Icon } from '#app/components/ui/icon.tsx'
+import { Input } from '#app/components/ui/input.tsx'
+import { Label } from '#app/components/ui/label.tsx'
+import { ThemeSwitch, useOptionalTheme } from '#app/routes/resources+/theme-switch.tsx'
 import { requireUserId } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
-import { Button } from '#app/components/ui/button.tsx'
-import { Label } from '#app/components/ui/label.tsx'
-import { Input } from '#app/components/ui/input.tsx'
-import { Icon } from '#app/components/ui/icon.tsx'
-import { Checkbox } from '#app/components/ui/checkbox.tsx'
 
 export async function loader({ request }: LoaderFunctionArgs) {
     const userId = await requireUserId(request)
@@ -69,12 +70,13 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function ParentSettings() {
     const { settings, story, progress } = useLoaderData<typeof loader>()
+    const theme = useOptionalTheme()
 
     return (
         <div className="container mx-auto p-6 max-w-md">
             <div className="flex items-center mb-6">
                 {story && (
-                    <Link to={`/stories/${story.id}`} className="mr-4 text-orange-600 hover:text-orange-800">
+                    <Link to={`/stories/${story.id}`} className="mr-4 text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300">
                         <Icon name="arrow-left" className="h-6 w-6" />
                     </Link>
                 )}
@@ -115,10 +117,20 @@ export default function ParentSettings() {
                 <Button type="submit">Save Global Settings</Button>
             </Form>
 
+            <div className="space-y-2 pt-4 border-b pb-8 mb-8">
+                <Label>App Theme</Label>
+                <div className="flex items-center gap-4">
+                    <ThemeSwitch userPreference={theme} />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                    Control the look of the app.
+                </p>
+            </div>
+
             {story && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="rounded-lg bg-orange-50 p-4 border border-orange-100">
-                        <h2 className="text-lg font-semibold text-orange-900 mb-4">
+                    <div className="rounded-lg bg-orange-50 p-4 border border-orange-100 dark:bg-stone-900 dark:border-stone-800">
+                        <h2 className="text-lg font-semibold text-orange-900 mb-4 dark:text-orange-100">
                             Settings for: <span className="italic">{story.title}</span>
                         </h2>
                         <Form method="POST" className="space-y-4">

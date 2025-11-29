@@ -3,6 +3,14 @@ import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-r
 import { Link, useLoaderData, useFetcher, useNavigate } from '@remix-run/react'
 import { useState, useRef, useEffect } from 'react'
 import { Icon } from '#app/components/ui/icon.tsx'
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+    SheetClose
+} from '#app/components/ui/sheet.tsx'
 import { getUserId, requireUserId } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { cn } from '#app/utils/misc.tsx'
@@ -110,7 +118,7 @@ export default function StoryPlayer() {
     const [sessionChaptersPlayed, setSessionChaptersPlayed] = useState(0)
 
     // Secret menu trigger state
-    const [titleTapCount, setTitleTapCount] = useState(0)
+    const [, setTitleTapCount] = useState(0)
 
 	const audioRef = useRef<HTMLAudioElement>(null)
 
@@ -198,6 +206,7 @@ export default function StoryPlayer() {
             }
         }, 10000) // Save every 10 seconds
         return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isPlaying, currentChapterIndex])
 
 	const togglePlay = () => {
@@ -273,22 +282,64 @@ export default function StoryPlayer() {
 	}
 
 	return (
-		<div className="flex min-h-screen flex-col bg-orange-50">
+		<div className="flex min-h-screen flex-col bg-orange-50 dark:bg-stone-950 transition-colors">
 			{/* Header */}
-			<div className="flex items-center p-4">
+			<div className="flex items-center p-4 relative">
 				<Link
 					to="/stories"
-					className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-lg transition-transform hover:scale-110"
+					className="flex h-12 w-12 items-center justify-center rounded-full bg-white dark:bg-stone-900 shadow-lg transition-transform hover:scale-110"
 				>
-					<Icon name="arrow-left" className="h-6 w-6 text-orange-600" />
+					<Icon name="arrow-left" className="h-6 w-6 text-orange-600 dark:text-orange-400" />
 					<span className="sr-only">Back</span>
 				</Link>
 				<h1
-                    className="ml-4 text-xl font-bold text-orange-900 select-none cursor-pointer active:scale-95 transition-transform"
+                    className="ml-4 text-xl font-bold text-orange-900 dark:text-orange-100 select-none cursor-pointer active:scale-95 transition-transform"
                     onClick={handleTitleClick}
                 >
                     {story.title}
                 </h1>
+
+                <div className="ml-auto">
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <button className="rounded-full bg-white dark:bg-stone-900 p-3 shadow-lg text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-stone-800 transition-colors">
+                                <Icon name="list" className="h-6 w-6" />
+                                <span className="sr-only">Chapters</span>
+                            </button>
+                        </SheetTrigger>
+                        <SheetContent side="right" className="w-[300px] sm:w-[400px] overflow-y-auto p-0 dark:bg-stone-950 dark:border-stone-800">
+                            <SheetHeader className="p-4 pb-2 sticky top-0 bg-white dark:bg-stone-950 z-10 border-b dark:border-stone-800">
+                                <SheetTitle className="text-xl font-bold text-orange-900 dark:text-orange-100">Chapters</SheetTitle>
+                            </SheetHeader>
+                            <div className="flex flex-col p-2">
+                                {story.chapters.map((chapter, index) => (
+                                    <SheetClose key={chapter.id} asChild>
+                                        <button
+                                            onClick={() => {
+                                                if (currentChapterIndex !== index) {
+                                                    setCurrentChapterIndex(index)
+                                                    setIsPlaying(true)
+                                                    setSessionChaptersPlayed(0)
+                                                }
+                                            }}
+                                            className={cn(
+                                                "w-full text-left p-4 rounded-xl transition-all text-base font-medium border mb-2 dark:border-transparent",
+                                                index === currentChapterIndex
+                                                    ? "bg-orange-100 border-orange-200 text-orange-900 shadow-sm dark:bg-orange-900/30 dark:border-orange-900/50 dark:text-orange-100"
+                                                    : "bg-white border-transparent hover:bg-gray-50 text-gray-600 hover:text-gray-900 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+                                            )}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span>{index + 1}. {chapter.title}</span>
+                                                {index === currentChapterIndex && <Icon name="play" className="h-4 w-4 opacity-50" />}
+                                            </div>
+                                        </button>
+                                    </SheetClose>
+                                ))}
+                            </div>
+                        </SheetContent>
+                    </Sheet>
+                </div>
 			</div>
 
 			{/* Main Content */}
@@ -302,8 +353,8 @@ export default function StoryPlayer() {
 							className="h-full w-full object-cover"
 						/>
 					) : (
-						<div className="flex h-full w-full items-center justify-center bg-orange-200">
-							<Icon name="file-text" className="h-24 w-24 text-orange-400" />
+						<div className="flex h-full w-full items-center justify-center bg-orange-200 dark:bg-stone-800">
+							<Icon name="file-text" className="h-24 w-24 text-orange-400 dark:text-stone-600" />
 						</div>
 					)}
 
@@ -325,10 +376,10 @@ export default function StoryPlayer() {
 
 				{/* Chapter Info */}
 				<div className="mt-8 text-center w-full max-w-md">
-					<h2 className="text-2xl font-bold text-orange-900 font-comic">
+					<h2 className="text-2xl font-bold text-orange-900 dark:text-orange-100 font-comic">
 						{currentChapter?.title || `Chapter ${currentChapterIndex + 1}`}
 					</h2>
-					<p className="text-orange-700">
+					<p className="text-orange-700 dark:text-orange-200">
 						{currentChapterIndex + 1} of {story.chapters.length}
 					</p>
 
@@ -341,9 +392,9 @@ export default function StoryPlayer() {
                                 max={chapterDuration}
                                 value={currentProgress}
                                 onChange={handleSeek}
-                                className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
+                                className="w-full h-2 bg-orange-200 dark:bg-stone-700 rounded-lg appearance-none cursor-pointer accent-orange-600 dark:accent-orange-500"
                             />
-                            <div className="flex justify-between text-xs text-orange-800 mt-1 font-mono">
+                            <div className="flex justify-between text-xs text-orange-800 dark:text-orange-300 mt-1 font-mono">
                                 <span>{formatTime(currentProgress)}</span>
                                 <span>{formatTime(chapterDuration)}</span>
                             </div>
@@ -358,7 +409,7 @@ export default function StoryPlayer() {
                         <button
                             onClick={prevChapter}
                             disabled={!hasPrevChapter}
-                            className="rounded-full bg-white p-4 shadow-lg disabled:opacity-30 text-orange-600 transition-transform hover:scale-105"
+                            className="rounded-full bg-white dark:bg-stone-900 p-4 shadow-lg disabled:opacity-30 text-orange-600 dark:text-orange-400 transition-transform hover:scale-105"
                         >
                             <Icon name="arrow-left" className="h-8 w-8" />
                             <span className="sr-only">Previous Chapter</span>
@@ -367,7 +418,7 @@ export default function StoryPlayer() {
 
 					<button
 						onClick={togglePlay}
-						className="rounded-full bg-orange-500 p-6 shadow-lg text-white transition-transform hover:scale-105 active:scale-95"
+						className="rounded-full bg-orange-500 dark:bg-orange-600 p-6 shadow-lg text-white transition-transform hover:scale-105 active:scale-95"
 					>
 						{isPlaying ? (
 							<Icon name="pause" className="h-10 w-10" />
@@ -381,7 +432,7 @@ export default function StoryPlayer() {
                         <button
                             onClick={nextChapter}
                             disabled={!hasNextChapter}
-                            className="rounded-full bg-white p-4 shadow-lg disabled:opacity-30 text-orange-600 transition-transform hover:scale-105"
+                            className="rounded-full bg-white dark:bg-stone-900 p-4 shadow-lg disabled:opacity-30 text-orange-600 dark:text-orange-400 transition-transform hover:scale-105"
                         >
                             <Icon name="arrow-right" className="h-8 w-8" />
                             <span className="sr-only">Next Chapter</span>

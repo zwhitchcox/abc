@@ -27,13 +27,13 @@ export default function StoriesIndex() {
 	const { stories } = useLoaderData<typeof loader>()
 
 	return (
-		<div className="min-h-screen bg-orange-50 p-8">
-			<h1 className="mb-8 text-4xl font-extrabold text-orange-800 text-center font-comic">
+		<div className="min-h-screen bg-orange-50 dark:bg-stone-950 p-8 transition-colors">
+			<h1 className="mb-8 text-4xl font-extrabold text-orange-800 dark:text-orange-100 text-center font-comic">
 				My Audiobooks
 			</h1>
 
 			{stories.length === 0 ? (
-				<div className="text-center text-xl text-gray-500">
+				<div className="text-center text-xl text-gray-500 dark:text-stone-400">
 					No stories yet! Ask your parent to upload some.
 				</div>
 			) : (
@@ -42,7 +42,7 @@ export default function StoriesIndex() {
 						<Link
 							key={story.id}
 							to={`/stories/${story.id}`}
-							className="group relative aspect-square overflow-hidden rounded-3xl border-4 border-white shadow-xl transition-transform hover:scale-105 hover:rotate-1"
+							className="group relative aspect-square overflow-hidden rounded-3xl border-4 border-white dark:border-stone-800 shadow-xl transition-transform hover:scale-105 hover:rotate-1"
 						>
 							{story.images[0] ? (
 								<img
@@ -51,7 +51,7 @@ export default function StoriesIndex() {
 									className="h-full w-full object-cover"
 								/>
 							) : (
-								<div className="flex h-full w-full items-center justify-center bg-orange-200 text-orange-800">
+								<div className="flex h-full w-full items-center justify-center bg-orange-200 dark:bg-stone-800 text-orange-800 dark:text-orange-200">
 									<span className="text-2xl font-bold">{story.title}</span>
 								</div>
 							)}
@@ -65,4 +65,3 @@ export default function StoriesIndex() {
 		</div>
 	)
 }
-
