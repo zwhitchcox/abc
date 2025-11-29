@@ -18,7 +18,7 @@ destination = "/data"
   ignorefile = "other/Dockerfile.dockerignore"
 
 [[services]]
-internal_port = 8_080
+  internal_port = 8_081
 processes = [ "app" ]
 protocol = "tcp"
 script_checks = [ ]
