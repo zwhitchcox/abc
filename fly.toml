@@ -14,8 +14,8 @@ source = "data"
 destination = "/data"
 
 [build]
-dockerfile = "/other/Dockerfile"
-ignorefile = "/other/Dockerfile.dockerignore"
+  dockerfile = "Dockerfile"
+  ignorefile = "other/Dockerfile.dockerignore"
 
 [[services]]
 internal_port = 8_080
@@ -53,9 +53,3 @@ script_checks = [ ]
   tls_skip_verify = false
   headers = { }
 
-  [[services.http_checks]]
-  grace_period = "10s"
-  interval = "30s"
-  method = "GET"
-  timeout = "5s"
-  path = "/litefs/health"
