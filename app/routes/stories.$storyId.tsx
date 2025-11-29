@@ -119,7 +119,8 @@ export default function StoryPlayer() {
         setTitleTapCount(prev => {
             const newCount = prev + 1
             if (newCount >= 5) { // 5 taps to trigger
-                navigate('/settings/parent')
+                // Pass storyId to settings page so parent can edit THIS story's progress
+                navigate(`/settings/parent?storyId=${story.id}`)
                 return 0
             }
             return newCount
