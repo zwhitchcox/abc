@@ -209,7 +209,12 @@ function App() {
 	useToast(data.toast)
 	const location = useLocation()
 	const isFullScreen =
-		fullScreenRoutes[location.pathname as keyof typeof fullScreenRoutes]
+		fullScreenRoutes[location.pathname as keyof typeof fullScreenRoutes] ||
+        location.pathname.startsWith('/stories')
+
+    // Hide sidebar trigger specifically for stories routes
+    const isStories = location.pathname.startsWith('/stories')
+    const showSidebarTrigger = !isStories
 
 	return (
 		<>
@@ -217,7 +222,7 @@ function App() {
 				<SidebarProvider defaultOpen={false}>
 					<AppSidebar />
 					<main className="relative w-full">
-						<SidebarTrigger className="absolute top-4 left-4 z-10" />
+						{showSidebarTrigger && <SidebarTrigger className="absolute top-4 left-4 z-10" />}
 						<Outlet />
 					</main>
 				</SidebarProvider>

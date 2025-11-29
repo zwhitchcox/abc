@@ -1,4 +1,4 @@
-import { Home, LetterText, BookOpen, Palette, Image } from 'lucide-react'
+import { Home, LetterText, BookOpen, Palette, Image, Headphones } from 'lucide-react'
 import {
 	Sidebar,
 	SidebarContent,
@@ -25,6 +25,11 @@ const items = [
 		title: 'Word Reading',
 		url: '/words',
 		icon: BookOpen,
+	},
+	{
+		title: 'Audiobooks',
+		url: '/stories',
+		icon: Headphones,
 	},
 	{
 		title: 'Colors',

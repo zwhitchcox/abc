@@ -19,12 +19,25 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  image       UserImage?
-  password    Password?
-  notes       Note[]
-  roles       Role[]
-  sessions    Session[]
-  connections Connection[]
+  image          UserImage?
+  password       Password?
+  notes          Note[]
+  roles          Role[]
+  sessions       Session[]
+  connections    Connection[]
+  storyProgress  StoryProgress[]
+  parentSettings ParentSettings?
+}
+
+model ParentSettings {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String @unique
+
+  maxChaptersToPlay Int @default(1)
 }
 
 model Note {
@@ -166,4 +179,79 @@ model Connection {
   userId String
 
   @@unique([providerName, providerId])
+}
+
+model Story {
+  id        String   @id @default(cuid())
+  title     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  images   StoryImage[]
+  chapters Chapter[]
+  audio    AudioFile?
+  progress StoryProgress[]
+}
+
+model StoryImage {
+  id          String  @id @default(cuid())
+  altText     String?
+  contentType String
+  blob        Bytes
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  story   Story  @relation(fields: [storyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  storyId String
+
+  @@index([storyId])
+}
+
+model Chapter {
+  id        String @id @default(cuid())
+  title     String
+  order     Int    @default(0)
+  startTime Float  @default(0)
+  endTime   Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  story   Story  @relation(fields: [storyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  storyId String
+
+  @@index([storyId])
+}
+
+model AudioFile {
+  id          String  @id @default(cuid())
+  contentType String
+  blob        Bytes? // Optional for backward compat / if we use filepath
+  filepath    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  story   Story  @relation(fields: [storyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  storyId String @unique
+}
+
+model StoryProgress {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  story   Story  @relation(fields: [storyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  storyId String
+
+  currentChapterIndex Int   @default(0)
+  currentTime         Float @default(0)
+
+  @@unique([userId, storyId])
+  @@index([userId])
+  @@index([storyId])
 }
