@@ -113,6 +113,8 @@ export async function action({ request }: ActionFunctionArgs) {
 	const title = common.title ?? originalFilename.replace(/\.[^/.]+$/, "")
 	const coverPicture = common.picture?.[0]
 
+	const mimeType = filepath.endsWith('.mp3') ? 'audio/mpeg' : 'audio/mp4'
+
 	const story = await prisma.story.create({
 		data: {
 			title,
@@ -125,7 +127,7 @@ export async function action({ request }: ActionFunctionArgs) {
 			} : undefined,
 			audio: {
 				create: {
-					contentType: 'audio/mp4',
+					contentType: mimeType,
 					filepath: filepath,
 				},
 			},
@@ -182,7 +184,7 @@ export default function NewStory() {
 
 	return (
 		<div className="container mx-auto p-6">
-			<h1 className="mb-6 text-2xl font-bold">Upload Audiobook (M4B)</h1>
+			<h1 className="mb-6 text-2xl font-bold">Upload Audiobook (M4B, MP3)</h1>
 			<FormProvider context={form.context}>
 				<Form
 					method="POST"
@@ -191,12 +193,12 @@ export default function NewStory() {
 					encType="multipart/form-data"
 				>
 					<div>
-						<Label htmlFor="audiobookFile">Audiobook File (.m4b)</Label>
+						<Label htmlFor="audiobookFile">Audiobook File (.m4b, .mp3)</Label>
 						<input
 							id="audiobookFile"
 							name="audiobookFile"
 							type="file"
-							accept=".m4b,audio/*"
+							accept=".m4b,.mp3,audio/*"
 							required
 							className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
 						/>
