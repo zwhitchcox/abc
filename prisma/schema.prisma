@@ -37,7 +37,8 @@ model ParentSettings {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   userId String @unique
 
-  maxChaptersToPlay Int @default(1)
+  maxChaptersToPlay Int     @default(1)
+  showFullControls  Boolean @default(false)
 }
 
 model Note {

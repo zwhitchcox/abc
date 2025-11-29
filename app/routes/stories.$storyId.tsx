@@ -88,6 +88,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return json({ success: true })
 }
 
+// Helper to format seconds into MM:SS
+function formatTime(seconds: number) {
+    if (isNaN(seconds)) return "0:00"
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
 export default function StoryPlayer() {
 	const { story, progress, parentSettings } = useLoaderData<typeof loader>()
     const fetcher = useFetcher()
@@ -96,6 +104,7 @@ export default function StoryPlayer() {
 	const [currentChapterIndex, setCurrentChapterIndex] = useState(progress?.currentChapterIndex ?? 0)
 	const [isPlaying, setIsPlaying] = useState(false)
     const [hasRestored, setHasRestored] = useState(false)
+    const [currentProgress, setCurrentProgress] = useState(0)
 
     // Session counter for chapters played (starts at 0, increments when a chapter finishes)
     const [sessionChaptersPlayed, setSessionChaptersPlayed] = useState(0)
@@ -113,13 +122,15 @@ export default function StoryPlayer() {
 	const hasPrevChapter = currentChapterIndex > 0
 
     const maxChaptersToPlay = parentSettings?.maxChaptersToPlay ?? 1
+    const showFullControls = parentSettings?.showFullControls ?? false
+
+    const chapterDuration = currentChapter ? (currentChapter.endTime ?? 0) - currentChapter.startTime : 0
 
     // Secret menu trigger
     const handleTitleClick = () => {
         setTitleTapCount(prev => {
             const newCount = prev + 1
             if (newCount >= 5) { // 5 taps to trigger
-                // Pass storyId to settings page so parent can edit THIS story's progress
                 navigate(`/settings/parent?storyId=${story.id}`)
                 return 0
             }
@@ -162,6 +173,8 @@ export default function StoryPlayer() {
                  audioRef.current.currentTime = currentChapter.startTime
              }
              prevChapterIndexRef.current = currentChapterIndex
+             // Reset progress bar visual
+             setCurrentProgress(0)
         }
     }, [currentChapterIndex, currentChapter, hasRestored])
 
@@ -195,11 +208,9 @@ export default function StoryPlayer() {
             // Check if we are at the end of the chapter and need to advance manually
             if (audioRef.current && currentChapter && audioRef.current.currentTime >= currentChapter.endTime - 0.5) {
                 if (hasNextChapter) {
-                    // Manually advancing after pause limit reached: reset session counter
                     setSessionChaptersPlayed(0)
                     nextChapter()
                 } else {
-                    // End of book, restart chapter?
                     audioRef.current.currentTime = currentChapter.startTime
                     setIsPlaying(true)
                 }
@@ -225,26 +236,35 @@ export default function StoryPlayer() {
 		}
 	}
 
+    const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const seekTime = Number(e.target.value)
+        if (audioRef.current && currentChapter) {
+            const newTime = currentChapter.startTime + seekTime
+            audioRef.current.currentTime = newTime
+            setCurrentProgress(seekTime)
+        }
+    }
+
 	const onTimeUpdate = () => {
 		if (!audioRef.current || !currentChapter) return
 
+        // Update progress bar state
+        const relativeTime = audioRef.current.currentTime - currentChapter.startTime
+        // Clamp to 0 and duration
+        const clampedTime = Math.max(0, Math.min(relativeTime, chapterDuration))
+        setCurrentProgress(clampedTime)
+
 		// Check if we passed the end of the current chapter
 		if (currentChapter.endTime && audioRef.current.currentTime >= currentChapter.endTime) {
-            // Chapter ended
             const newSessionCount = sessionChaptersPlayed + 1
             setSessionChaptersPlayed(newSessionCount)
 
             if (newSessionCount >= maxChaptersToPlay) {
-                // Limit reached, stop
                 setIsPlaying(false)
                 audioRef.current.pause()
-                // Optional: Reset session count so if they press play again it starts a new session?
-                // setSessionChaptersPlayed(0)
             } else if (hasNextChapter) {
-                // Continue to next chapter
                 nextChapter()
             } else {
-                // End of book
                 setIsPlaying(false)
                 audioRef.current.pause()
             }
@@ -304,18 +324,46 @@ export default function StoryPlayer() {
 				</div>
 
 				{/* Chapter Info */}
-				<div className="mt-8 text-center">
+				<div className="mt-8 text-center w-full max-w-md">
 					<h2 className="text-2xl font-bold text-orange-900 font-comic">
 						{currentChapter?.title || `Chapter ${currentChapterIndex + 1}`}
 					</h2>
 					<p className="text-orange-700">
 						{currentChapterIndex + 1} of {story.chapters.length}
 					</p>
+
+                    {/* Progress Bar (Conditional) */}
+                    {showFullControls && (
+                        <div className="mt-4 w-full">
+                            <input
+                                type="range"
+                                min={0}
+                                max={chapterDuration}
+                                value={currentProgress}
+                                onChange={handleSeek}
+                                className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
+                            />
+                            <div className="flex justify-between text-xs text-orange-800 mt-1 font-mono">
+                                <span>{formatTime(currentProgress)}</span>
+                                <span>{formatTime(chapterDuration)}</span>
+                            </div>
+                        </div>
+                    )}
 				</div>
 
 				{/* Navigation Controls */}
-				<div className="mt-8 flex gap-8">
-                    {/* Buttons hidden as requested */}
+				<div className="mt-8 flex gap-8 items-center">
+                    {/* Prev Button (Conditional) */}
+                    {showFullControls && (
+                        <button
+                            onClick={prevChapter}
+                            disabled={!hasPrevChapter}
+                            className="rounded-full bg-white p-4 shadow-lg disabled:opacity-30 text-orange-600 transition-transform hover:scale-105"
+                        >
+                            <Icon name="arrow-left" className="h-8 w-8" />
+                            <span className="sr-only">Previous Chapter</span>
+                        </button>
+                    )}
 
 					<button
 						onClick={togglePlay}
@@ -327,6 +375,18 @@ export default function StoryPlayer() {
 							<Icon name="play" className="h-10 w-10" />
 						)}
 					</button>
+
+                    {/* Next Button (Conditional) */}
+                    {showFullControls && (
+                        <button
+                            onClick={nextChapter}
+                            disabled={!hasNextChapter}
+                            className="rounded-full bg-white p-4 shadow-lg disabled:opacity-30 text-orange-600 transition-transform hover:scale-105"
+                        >
+                            <Icon name="arrow-right" className="h-8 w-8" />
+                            <span className="sr-only">Next Chapter</span>
+                        </button>
+                    )}
 				</div>
 
 				{story.audio?.id && (

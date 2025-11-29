@@ -6,6 +6,7 @@ import { Button } from '#app/components/ui/button.tsx'
 import { Label } from '#app/components/ui/label.tsx'
 import { Input } from '#app/components/ui/input.tsx'
 import { Icon } from '#app/components/ui/icon.tsx'
+import { Checkbox } from '#app/components/ui/checkbox.tsx'
 
 export async function loader({ request }: LoaderFunctionArgs) {
     const userId = await requireUserId(request)
@@ -41,10 +42,12 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (intent === 'updateSettings') {
         const maxChaptersToPlay = Number(formData.get('maxChaptersToPlay'))
+        const showFullControls = formData.get('showFullControls') === 'on'
+
         await prisma.parentSettings.upsert({
             where: { userId },
-            update: { maxChaptersToPlay },
-            create: { userId, maxChaptersToPlay }
+            update: { maxChaptersToPlay, showFullControls },
+            create: { userId, maxChaptersToPlay, showFullControls }
         })
         return json({ success: true })
     }
@@ -94,6 +97,21 @@ export default function ParentSettings() {
                         Set to 1 to pause after every chapter.
                     </p>
                 </div>
+
+                <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                        <Checkbox
+                            id="showFullControls"
+                            name="showFullControls"
+                            defaultChecked={settings?.showFullControls ?? false}
+                        />
+                        <Label htmlFor="showFullControls">Show Full Player Controls</Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground ml-6">
+                        Enables seek bar and chapter skip buttons.
+                    </p>
+                </div>
+
                 <Button type="submit">Save Global Settings</Button>
             </Form>
 
