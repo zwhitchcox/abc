@@ -2,7 +2,7 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "#app/components/ui/button";
 import {
   Card,

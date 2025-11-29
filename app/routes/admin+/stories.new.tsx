@@ -53,7 +53,7 @@ function probe(filePath: string): Promise<any> {
             } else {
                 try {
                     resolve(JSON.parse(stdout))
-                } catch (e) {
+                } catch {
                     reject(new Error('Failed to parse ffprobe JSON output'))
                 }
             }

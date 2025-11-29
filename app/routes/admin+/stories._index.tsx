@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import {
 	json,
-	redirect,
 	type LoaderFunctionArgs,
 	type ActionFunctionArgs,
 } from '@remix-run/node'

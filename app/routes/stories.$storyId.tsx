@@ -177,7 +177,7 @@ export default function StoryPlayer() {
         if (!hasRestored) return // Wait for restoration first
 
         if (prevChapterIndexRef.current !== currentChapterIndex) {
-             if (audioRef.current) {
+             if (audioRef.current && currentChapter) {
                  audioRef.current.currentTime = currentChapter.startTime
              }
              prevChapterIndexRef.current = currentChapterIndex
@@ -215,7 +215,7 @@ export default function StoryPlayer() {
             setIsPlaying(false)
         } else {
             // Check if we are at the end of the chapter and need to advance manually
-            if (audioRef.current && currentChapter && audioRef.current.currentTime >= currentChapter.endTime - 0.5) {
+            if (audioRef.current && currentChapter && currentChapter.endTime && audioRef.current.currentTime >= currentChapter.endTime - 0.5) {
                 if (hasNextChapter) {
                     setSessionChaptersPlayed(0)
                     nextChapter()

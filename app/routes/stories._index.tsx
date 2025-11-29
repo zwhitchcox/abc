@@ -2,7 +2,7 @@ import { json, type LoaderFunctionArgs } from '@remix-run/node'
 import { Link, useLoaderData } from '@remix-run/react'
 import { prisma } from '#app/utils/db.server.ts'
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({}: LoaderFunctionArgs) {
 	const stories = await prisma.story.findMany({
 		select: {
 			id: true,
