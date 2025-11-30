@@ -378,6 +378,8 @@ export async function action({ request }: ActionFunctionArgs) {
         const globalEndTime = formData.get('endTime') as string
         const title = formData.get('title') as string
         const downloadPlaylist = formData.get('downloadPlaylist') === 'on'
+        const playlistWaitTimeStr = formData.get('playlistWaitTime') as string
+        const playlistWaitTimeMinutes = playlistWaitTimeStr ? parseInt(playlistWaitTimeStr, 10) : 10
 
         const userId = await getUserId(request)
         const job = await createJob('import:youtube', userId, {
@@ -444,12 +446,20 @@ export async function action({ request }: ActionFunctionArgs) {
                                     else skipped++
                                     results.push({ url: videoUrl, status: downloaded ? 'downloaded' : 'skipped' })
 
-                                    // Wait random time between 30s and 90s between downloads
+                                    // Wait configurable time between downloads
                                     if (downloaded && i < videoUrls.length - 1) {
-                                        const waitTimeSeconds = Math.floor(Math.random() * (90 - 30 + 1) + 30)
+                                        // Calculate wait time in seconds based on user input
+                                        // We'll add a small random variance of +/- 20% to make it look more natural
+                                        const baseWaitSeconds = playlistWaitTimeMinutes * 60
+                                        const variance = baseWaitSeconds * 0.2
+                                        const minWait = Math.max(1, baseWaitSeconds - variance)
+                                        const maxWait = baseWaitSeconds + variance
+
+                                        const waitTimeSeconds = Math.floor(Math.random() * (maxWait - minWait + 1) + minWait)
+
                                         console.log(`Waiting ${waitTimeSeconds} seconds before next download to avoid rate limits...`)
                                         await updateJobProgress(job.id, `${progressPercent}%`, {
-                                            message: `Waiting ${waitTimeSeconds}s before next video...`,
+                                            message: `Waiting ${Math.round(waitTimeSeconds / 60)}m before next video...`,
                                             processed: processedCount + 1,
                                             total: totalVideos
                                         })
@@ -756,6 +766,18 @@ export default function NewStory() {
                                     placeholder="My Custom Title"
                                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
+                            </div>
+                            <div>
+                                <Label htmlFor="playlistWaitTime">Playlist Wait Time (minutes, default 10)</Label>
+                                <input
+                                    id="playlistWaitTime"
+                                    name="playlistWaitTime"
+                                    type="number"
+                                    min="0"
+                                    defaultValue="10"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">Time to wait between downloading videos in a playlist to avoid bot detection.</p>
                             </div>
                         </>
                     )}
