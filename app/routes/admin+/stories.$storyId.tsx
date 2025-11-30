@@ -18,7 +18,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
     const story = await prisma.story.findUnique({
         where: { id: params.storyId },
-        include: { tags: true, images: { take: 1 } }
+        include: { tags: true, images: { take: 1 }, audio: true }
     })
 
     invariantResponse(story, 'Story not found', { status: 404 })
@@ -144,6 +144,32 @@ export default function EditStory() {
                     <Input id="title" name="title" defaultValue={story.title} required />
                 </div>
 
+                {story.audio && (
+                    <div className="space-y-2">
+                        <Label>Admin Preview</Label>
+                        <div className="p-4 bg-stone-100 dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700">
+                            {story.audio.contentType.startsWith('video') ? (
+                                <video
+                                    src={`/resources/audio-files/${story.audio.id}`}
+                                    controls
+                                    className="w-full max-h-[400px] rounded-md bg-black"
+                                    preload="metadata"
+                                />
+                            ) : (
+                                <audio
+                                    src={`/resources/audio-files/${story.audio.id}`}
+                                    controls
+                                    className="w-full"
+                                    preload="metadata"
+                                />
+                            )}
+                            <p className="text-xs text-muted-foreground mt-2">
+                                This is a raw preview. Playback progress is not saved and parental controls are not enforced.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 <div>
                     <Label htmlFor="coverImage">Cover Image</Label>
                     <div className="flex gap-6 items-end mt-2 mb-2">
@@ -197,14 +223,6 @@ export default function EditStory() {
                     <Button variant="secondary" asChild>
                         <Link to="/admin/stories">Cancel</Link>
                     </Button>
-                    <div className="ml-auto">
-                        <Button variant="outline" asChild>
-                            <Link to={`/stories/${story.id}`} target="_blank" rel="noreferrer">
-                                <Icon name="play" className="mr-2 h-4 w-4" />
-                                Preview Story
-                            </Link>
-                        </Button>
-                    </div>
                 </div>
             </Form>
 
