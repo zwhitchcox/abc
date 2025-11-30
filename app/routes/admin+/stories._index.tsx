@@ -86,7 +86,9 @@ export default function StoriesAdminRoute() {
         <div className="container mx-auto p-8 max-w-6xl">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-stone-800 dark:text-stone-100">Manage Stories</h1>
+                    <h1 className="text-3xl font-bold text-stone-800 dark:text-stone-100">
+                        Manage Stories <span className="text-lg text-muted-foreground font-medium ml-2">({filteredStories.length})</span>
+                    </h1>
                     <p className="text-muted-foreground mt-1">View, edit, and delete your library content.</p>
                 </div>
                 <Button asChild className="bg-orange-600 hover:bg-orange-700 text-white shadow-md">

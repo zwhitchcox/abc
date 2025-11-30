@@ -13,15 +13,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
         include: {
             stories: {
                 include: {
-                    images: {
+			images: {
                         take: 1,
                         select: { id: true, altText: true, updatedAt: true }
-                    },
+				},
                     tags: { select: { id: true } }
-                },
+			},
                 orderBy: { createdAt: 'desc' }
             }
-        },
+		},
         orderBy: { name: 'asc' }
     })
 
@@ -206,12 +206,12 @@ function CountdownOverlay({ availableAt, reason }: { availableAt: string | null,
         )
     }
 
-    return (
+	return (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/80 text-white p-4 backdrop-blur-sm z-10">
             <Icon name="clock" className="h-12 w-12 mb-2 text-white/80" />
             <span className="text-xl font-bold font-mono">{timeLeft}</span>
             <span className="text-xs text-white/70 mt-1 uppercase tracking-widest">{reason || 'Locked'}</span>
-        </div>
+				</div>
     )
 }
 
@@ -272,7 +272,7 @@ function StoryCard({ story, tagStatus, typeStatus }: {
     }
 
     return (
-        <Link
+						<Link
             to={isRestricted ? '#' : `/stories/${story.id}`}
             onClick={(e) => isRestricted && e.preventDefault()}
             className={cn(
@@ -281,14 +281,14 @@ function StoryCard({ story, tagStatus, typeStatus }: {
                     ? "border-gray-300 dark:border-stone-700 grayscale cursor-not-allowed"
                     : "border-white dark:border-stone-800 hover:scale-105 hover:rotate-1 cursor-pointer"
             )}
-        >
-            {story.images[0] ? (
-                <img
+						>
+							{story.images[0] ? (
+								<img
                     src={`/resources/story-images/${story.images[0].id}?t=${new Date(story.images[0].updatedAt).getTime()}`}
-                    alt={story.images[0].altText ?? story.title}
-                    className="h-full w-full object-cover"
-                />
-            ) : (
+									alt={story.images[0].altText ?? story.title}
+									className="h-full w-full object-cover"
+								/>
+							) : (
                 <div className="flex h-full w-full items-center justify-center bg-orange-200 dark:bg-stone-800 text-orange-800 dark:text-orange-200">
                     <span className="text-2xl font-bold p-4 text-center">{story.title}</span>
                 </div>
@@ -301,12 +301,12 @@ function StoryCard({ story, tagStatus, typeStatus }: {
                     {story.type === 'readaloud' && (
                         <div className="absolute top-2 right-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
                             VIDEO
-                        </div>
-                    )}
+								</div>
+							)}
                     {story.type === 'audiobook' && (
                         <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
                             AUDIO
-                        </div>
+							</div>
                     )}
                 </>
             )}
@@ -314,7 +314,7 @@ function StoryCard({ story, tagStatus, typeStatus }: {
             {isRestricted && (
                 <CountdownOverlay availableAt={restrictionAvailableAt} reason={restrictionReason} />
             )}
-        </Link>
+						</Link>
     )
 }
 
@@ -379,9 +379,9 @@ export default function StoriesIndex() {
                 {tags.every(t => t.stories.length === 0) && (
                     <div className="text-center text-xl text-gray-500 dark:text-stone-400 mt-12">
                         No stories found. Ask your parent to upload some!
-                    </div>
-                )}
+				</div>
+			)}
             </div>
-        </div>
-    )
+		</div>
+	)
 }

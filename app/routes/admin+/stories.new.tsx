@@ -219,8 +219,18 @@ async function processReadAloud(
     console.log('Executing yt-dlp with args:', args)
 
     await new Promise<void>((resolve, reject) => {
-        const child = spawn(binaryPath, args, {
-            stdio: 'inherit'
+        const child = spawn(binaryPath, args)
+
+        // Pipe stdout and stderr to console AND capture for error handling
+        let stderr = ''
+
+        child.stdout.on('data', (data) => {
+            process.stdout.write(data)
+        })
+
+        child.stderr.on('data', (data) => {
+            process.stderr.write(data)
+            stderr += data.toString()
         })
 
         child.on('error', (error) => {
@@ -234,7 +244,8 @@ async function processReadAloud(
                 resolve()
             } else {
                 console.error(`[yt-dlp] Process exited with code ${code}`)
-                reject(new Error(`yt-dlp exited with code ${code}`))
+                // Pass the captured stderr in the error message so the caller can inspect it
+                reject(new Error(`yt-dlp exited with code ${code}: ${stderr}`))
             }
         })
     })
@@ -457,7 +468,14 @@ export async function action({ request }: ActionFunctionArgs) {
                                         await failJob(job.id, new Error(`Bot detection triggered by YouTube. Please <a href="${updateCookiesUrl}" class="underline text-blue-500 hover:text-blue-700">update cookies</a>.`))
                                         return // Exit the background function entirely
                                     }
-                                    // Continue to next video otherwise
+
+                                    // Check for copyright error
+                                    if (errorMsg.includes('copyright claim') || errorMsg.includes('Video unavailable')) {
+                                        console.log(`[playlist] Skipping video due to copyright/unavailability: ${videoUrl}`)
+                                        // Do not fail the job, just log and continue
+                                    } else {
+                                         // For other errors, maybe we still want to continue but log it as failed
+                                    }
                                 }
                                 processedCount++
                             }
@@ -492,7 +510,16 @@ export async function action({ request }: ActionFunctionArgs) {
                             results.push({ url, status: downloaded ? 'downloaded' : 'skipped' })
                         } catch (e) {
                             failed++
-                            results.push({ url, status: 'failed', error: String(e) })
+                            const errorMsg = String(e)
+                            results.push({ url, status: 'failed', error: errorMsg })
+
+                            // Abort if bot detection
+                            if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('bot')) {
+                                console.error('Bot detection triggered, aborting batch.')
+                                const updateCookiesUrl = `/admin/settings`
+                                await failJob(job.id, new Error(`Bot detection triggered by YouTube. Please <a href="${updateCookiesUrl}" class="underline text-blue-500 hover:text-blue-700">update cookies</a>.`))
+                                return // Exit the background function entirely
+                            }
                         }
                         processedCount++
                     }
