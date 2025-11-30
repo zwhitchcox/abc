@@ -33,6 +33,9 @@ jobs:
       - name: 📥 Install deps
         run: pnpm install
 
+      - name: 🧬 Generate Prisma Client
+        run: npx prisma generate
+
       - name: 🔬 Lint
         run: pnpm run lint
 
@@ -56,6 +59,9 @@ jobs:
 
       - name: 📥 Install deps
         run: pnpm install
+
+      - name: 🧬 Generate Prisma Client
+        run: npx prisma generate
 
       - name: 🔎 Type check
         run: pnpm run typecheck
