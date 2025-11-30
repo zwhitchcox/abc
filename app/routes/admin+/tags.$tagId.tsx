@@ -30,6 +30,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const limitMinutes = formData.get('limitMinutes') ? Number(formData.get('limitMinutes')) : 0
     const intervalHours = formData.get('intervalHours') ? Number(formData.get('intervalHours')) : 24
     const enabled = formData.get('enabled') === 'on'
+    const isDefault = formData.get('isDefault') === 'on'
 
     const rStart = formData.get('restrictedHoursStart')
     const rEnd = formData.get('restrictedHoursEnd')
@@ -47,6 +48,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             limitSeconds,
             intervalSeconds,
             enabled,
+            isDefault,
             restrictedHoursStart,
             restrictedHoursEnd
         }
@@ -74,10 +76,17 @@ export default function EditTag() {
                         <Input id="name" name="name" defaultValue={tag.name} required />
                     </div>
 
-                    <div className="flex items-center space-x-2">
-                        <Checkbox id="enabled" name="enabled" defaultChecked={tag.enabled} />
-                        <Label htmlFor="enabled">Enabled</Label>
+                    <div className="flex items-center gap-6 mb-4">
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="enabled" name="enabled" defaultChecked={tag.enabled} />
+                            <Label htmlFor="enabled">Enabled</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="isDefault" name="isDefault" defaultChecked={tag.isDefault} />
+                            <Label htmlFor="isDefault">Default Tag</Label>
+                        </div>
                     </div>
+                    <p className="text-xs text-muted-foreground -mt-4 mb-4">Default tags are automatically applied to new stories.</p>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
