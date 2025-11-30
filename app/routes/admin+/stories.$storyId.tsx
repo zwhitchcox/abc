@@ -3,6 +3,7 @@ import { Form, useLoaderData, Link } from '@remix-run/react'
 import { useState } from 'react'
 import { type FileUpload, parseFormData } from '@mjackson/form-data-parser'
 import { Button } from '#app/components/ui/button.tsx'
+import { Icon } from '#app/components/ui/icon.tsx'
 import { Input } from '#app/components/ui/input.tsx'
 import { Label } from '#app/components/ui/label.tsx'
 import { prisma } from '#app/utils/db.server.ts'
@@ -164,11 +165,19 @@ export default function EditStory() {
                     </div>
                 </div>
 
-                <div className="flex gap-4">
+                <div className="flex gap-4 items-center">
                     <Button type="submit">Save Changes</Button>
                     <Button variant="secondary" asChild>
                         <Link to="/admin/stories">Cancel</Link>
                     </Button>
+                    <div className="ml-auto">
+                        <Button variant="outline" asChild>
+                            <Link to={`/stories/${story.id}`} target="_blank" rel="noreferrer">
+                                <Icon name="play" className="mr-2 h-4 w-4" />
+                                Preview Story
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
             </Form>
         </div>

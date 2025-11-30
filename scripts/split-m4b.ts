@@ -1,10 +1,10 @@
-import { PrismaClient } from '@prisma/client'
 import { spawn } from 'child_process'
 import fs from 'fs'
-import path from 'path'
-import https from 'https'
 import http from 'http'
+import https from 'https'
+import path from 'path'
 import { chromium } from '@playwright/test'
+import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
@@ -149,7 +149,10 @@ async function main() {
     })
 
     console.log('Launching browser for image search...')
-    const browser = await chromium.launch({ headless: true })
+    const browser = await chromium.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    })
     const context = await browser.newContext({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     })
