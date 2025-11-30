@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-HOST="5.161.189.133"
-USER="root"
+HOST="${SSH_HOST:-5.161.189.133}"
+USER="${SSH_USER:-root}"
 DIR="/opt/zephyr"
 
 # Check for .env.production
