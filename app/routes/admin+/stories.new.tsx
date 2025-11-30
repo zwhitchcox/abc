@@ -464,8 +464,7 @@ export async function action({ request }: ActionFunctionArgs) {
                                     // Abort if bot detection
                                     if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('bot')) {
                                         console.error('Bot detection triggered, aborting playlist.')
-                                        const updateCookiesUrl = `/admin/settings`
-                                        await failJob(job.id, new Error(`Bot detection triggered by YouTube. Please <a href="${updateCookiesUrl}" class="underline text-blue-500 hover:text-blue-700">update cookies</a>.`))
+                                        await failJob(job.id, new Error(`Bot detection triggered by YouTube. Please update cookies.`))
                                         return // Exit the background function entirely
                                     }
 
@@ -516,8 +515,7 @@ export async function action({ request }: ActionFunctionArgs) {
                             // Abort if bot detection
                             if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('bot')) {
                                 console.error('Bot detection triggered, aborting batch.')
-                                const updateCookiesUrl = `/admin/settings`
-                                await failJob(job.id, new Error(`Bot detection triggered by YouTube. Please <a href="${updateCookiesUrl}" class="underline text-blue-500 hover:text-blue-700">update cookies</a>.`))
+                                await failJob(job.id, new Error(`Bot detection triggered by YouTube. Please update cookies.`))
                                 return // Exit the background function entirely
                             }
                         }
