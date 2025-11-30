@@ -16,7 +16,8 @@ import {
 import { Form, useActionData, useLoaderData } from '@remix-run/react'
 import ffprobeStatic from 'ffprobe-static'
 import { useState } from 'react'
-import YtDlpWrap from 'yt-dlp-wrap'
+import YtDlpWrapImport from 'yt-dlp-wrap'
+const YtDlpWrap = (YtDlpWrapImport as any).default ?? YtDlpWrapImport
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { Button } from '#app/components/ui/button.tsx'
 import { Label } from '#app/components/ui/label.tsx'
