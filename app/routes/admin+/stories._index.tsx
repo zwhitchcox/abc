@@ -125,15 +125,15 @@ export default function StoriesAdminRoute() {
                         filteredStories.map((story) => (
                             <div key={story.id} className="p-4 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors flex items-center gap-4 group">
                                 {/* Thumbnail */}
-                                <div className="h-16 w-16 rounded-lg overflow-hidden bg-stone-200 shrink-0 border border-stone-200 dark:border-stone-700 relative">
-                                    {story.images[0] ? (
-                                        <img src={`/resources/story-images/${story.images[0].id}`} alt="" className="h-full w-full object-cover" />
-                                    ) : (
-                                        <div className="h-full w-full flex items-center justify-center text-stone-400">
-                                            <Icon name="image" className="h-6 w-6" />
-                                        </div>
-                                    )}
-                                    <div className="absolute bottom-0 right-0 p-0.5 bg-black/50 rounded-tl text-white">
+                                        <div className="h-16 w-16 rounded-lg overflow-hidden bg-stone-200 shrink-0 border border-stone-200 dark:border-stone-700 relative">
+                                            {story.images[0] ? (
+                                                <img src={`/resources/story-images/${story.images[0].id}`} alt="" className="h-full w-full object-cover" />
+                                            ) : (
+                                                <div className="h-full w-full flex items-center justify-center text-stone-400">
+                                                    <Icon name="camera" className="h-6 w-6" />
+                                                </div>
+                                            )}
+                                            <div className="absolute bottom-0 right-0 p-0.5 bg-black/50 rounded-tl text-white">
                                         <Icon name={story.type === 'readaloud' ? 'camera' : 'file-text'} className="h-3 w-3" />
                                     </div>
                                 </div>

@@ -1,7 +1,7 @@
 import { invariantResponse } from '@epic-web/invariant'
-import { json, redirect, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/node'
-import { Link, useLoaderData, useFetcher, useNavigate } from '@remix-run/react'
-import { useState, useRef, useEffect } from 'react'
+import { json, redirect, type LoaderFunctionArgs } from '@remix-run/node'
+import { Link, useLoaderData, useNavigate } from '@remix-run/react'
+import { useState, useEffect, useRef } from 'react'
 import { Icon } from '#app/components/ui/icon.tsx'
 import {
     Sheet,
@@ -11,7 +11,8 @@ import {
     SheetTrigger,
     SheetClose
 } from '#app/components/ui/sheet.tsx'
-import { getUserId, requireUserId } from '#app/utils/auth.server.ts'
+import { usePlayer } from '#app/context/player.tsx'
+import { getUserId } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { cn } from '#app/utils/misc.tsx'
 
@@ -68,23 +69,39 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             where: { userId }
         })
 
-        // Permissive Restriction Check
+        // Check Global Limit
+        if (parentSettings?.globalLimitSeconds) {
+             const now = new Date()
+             const windowStart = new Date(now.getTime() - parentSettings.globalIntervalSeconds * 1000)
+             const globalLogs = await prisma.usageLog.findMany({
+                 where: {
+                     userId,
+                     createdAt: { gt: windowStart }
+                 }
+             })
+             const globalTotal = globalLogs.reduce((acc, log) => acc + log.secondsPlayed, 0)
+
+             if (globalTotal >= parentSettings.globalLimitSeconds) {
+                  throw redirect(`/timeout?reason=Global Time Limit Reached`)
+             }
+        }
+
+        // Hybrid Restriction Check
         if (!story.tags || story.tags.length === 0) {
             throw redirect(`/timeout?reason=No Tags Assigned`)
         }
 
         const timeZone = parentSettings?.timeZone || 'UTC'
         const now = new Date()
-        let isAllowed = false
+
+        let hasEnabledTag = false
+        let blockingReason: string | null = null
 
         for (const tag of story.tags) {
-            let tagOpen = true
+            if (tag.enabled) hasEnabledTag = true
 
-            // 1. Enabled Check
-            if (!tag.enabled) tagOpen = false
-
-            // 2. Restricted Hours Check
-            if (tagOpen && tag.restrictedHoursStart !== null && tag.restrictedHoursEnd !== null) {
+            // Check Hours (Restrictive)
+            if (tag.restrictedHoursStart !== null && tag.restrictedHoursEnd !== null) {
                 try {
                     const formatter = new Intl.DateTimeFormat('en-US', {
                         timeZone,
@@ -100,16 +117,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                          inRange = hour >= tag.restrictedHoursStart || hour < tag.restrictedHoursEnd
                     }
 
-                    if (inRange) tagOpen = false
+                    if (inRange) blockingReason = `Restricted Hours`
                 } catch (e) {
                     console.error('Timezone check failed:', e)
                 }
             }
 
-            // 3. Usage Check
-            if (tagOpen && tag.limitSeconds) {
+            // Check Limits (Restrictive)
+            if (!blockingReason && tag.limitSeconds) {
                 const windowStart = new Date(now.getTime() - tag.intervalSeconds * 1000)
-                // Count usage for this specific tag
                 const logs = await prisma.usageLog.findMany({
                     where: {
                         userId,
@@ -118,121 +134,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                     }
                 })
                 const total = logs.reduce((acc, log) => acc + log.secondsPlayed, 0)
-                if (total >= tag.limitSeconds) tagOpen = false
+                if (total >= tag.limitSeconds) blockingReason = `Time Limit (${tag.name})`
             }
 
-            if (tagOpen) {
-                isAllowed = true
-                break
-            }
+            if (blockingReason) break
         }
 
-        if (!isAllowed) {
+        if (blockingReason) {
+            throw redirect(`/timeout?reason=${encodeURIComponent(blockingReason)}`)
+        }
+
+        if (!hasEnabledTag) {
             throw redirect(`/timeout?reason=Restricted`)
         }
     }
 
 	return json({ story, progress, parentSettings })
-}
-
-export async function action({ request, params }: ActionFunctionArgs) {
-    const userId = await requireUserId(request)
-    invariantResponse(params.storyId, 'Story ID is required')
-
-    const formData = await request.formData()
-    const currentChapterIndex = Number(formData.get('currentChapterIndex'))
-    const currentTime = Number(formData.get('currentTime'))
-    const increment = Number(formData.get('increment') || 0)
-
-    // Save Playback Progress
-    await prisma.storyProgress.upsert({
-        where: {
-            userId_storyId: { userId, storyId: params.storyId }
-        },
-        update: {
-            currentChapterIndex,
-            currentTime,
-        },
-        create: {
-            userId,
-            storyId: params.storyId,
-            currentChapterIndex,
-            currentTime,
-        }
-    })
-
-    // Record Usage and Check Permissive Limits
-    if (increment > 0) {
-        await prisma.usageLog.create({
-            data: {
-                userId,
-                storyId: params.storyId,
-                secondsPlayed: increment
-            }
-        })
-
-        // Check if ANY tag is still valid
-        const story = await prisma.story.findUnique({
-            where: { id: params.storyId },
-            include: { tags: true }
-        })
-
-        const parentSettings = await prisma.parentSettings.findUnique({ where: { userId } })
-        const timeZone = parentSettings?.timeZone || 'UTC'
-        const now = new Date()
-
-        if (!story?.tags || story.tags.length === 0) {
-             return json({ success: true, limitReached: true, reason: 'No Tags' })
-        }
-
-        let isAllowed = false
-
-        for (const tag of story.tags) {
-            let tagOpen = true
-
-            if (!tag.enabled) tagOpen = false
-
-            if (tagOpen && tag.restrictedHoursStart !== null && tag.restrictedHoursEnd !== null) {
-                 try {
-                    const formatter = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: false })
-                    const hour = parseInt(formatter.format(now)) % 24
-                    let inRange = false
-                    if (tag.restrictedHoursStart < tag.restrictedHoursEnd) {
-                        inRange = hour >= tag.restrictedHoursStart && hour < tag.restrictedHoursEnd
-                    } else if (tag.restrictedHoursStart > tag.restrictedHoursEnd) {
-                         inRange = hour >= tag.restrictedHoursStart || hour < tag.restrictedHoursEnd
-                    }
-                    if (inRange) tagOpen = false
-                } catch {
-                    // ignore error
-                }
-            }
-
-            if (tagOpen && tag.limitSeconds) {
-                const windowStart = new Date(now.getTime() - tag.intervalSeconds * 1000)
-                const logs = await prisma.usageLog.findMany({
-                    where: {
-                        userId,
-                        story: { tags: { some: { id: tag.id } } },
-                        createdAt: { gt: windowStart }
-                    }
-                })
-                const total = logs.reduce((acc, log) => acc + log.secondsPlayed, 0)
-                if (total >= tag.limitSeconds) tagOpen = false
-            }
-
-            if (tagOpen) {
-                isAllowed = true
-                break
-            }
-        }
-
-        if (!isAllowed) {
-            return json({ success: true, limitReached: true, reason: 'Limit Reached' })
-        }
-    }
-
-    return json({ success: true })
 }
 
 // Helper to format seconds into MM:SS
@@ -245,208 +162,116 @@ function formatTime(seconds: number) {
 
 export default function StoryPlayer() {
 	const { story, progress, parentSettings } = useLoaderData<typeof loader>()
-    const fetcher = useFetcher()
     const navigate = useNavigate()
+    const {
+        play, pause, resume, seek, nextChapter, prevChapter,
+        currentTime, currentStory, isPlaying,
+        setMaxVolume, setVolume, volume,
+        currentChapterIndex
+    } = usePlayer()
 
-	const [currentChapterIndex, setCurrentChapterIndex] = useState(progress?.currentChapterIndex ?? 0)
-	const [isPlaying, setIsPlaying] = useState(false)
-    const [hasRestored, setHasRestored] = useState(false)
-    const [currentProgress, setCurrentProgress] = useState(0)
-
-    // Session counter for chapters played (starts at 0, increments when a chapter finishes)
-    const [sessionChaptersPlayed, setSessionChaptersPlayed] = useState(0)
-
-    // Secret menu trigger state
+    const videoRef = useRef<HTMLVideoElement>(null)
     const [, setTitleTapCount] = useState(0)
 
-	const mediaRef = useRef<HTMLMediaElement>(null)
+    // Sync Max Volume
+    useEffect(() => {
+        if (parentSettings?.maxVolume) setMaxVolume(parentSettings.maxVolume)
+    }, [parentSettings, setMaxVolume])
 
-    // Track previous chapter index to detect actual changes
-    const prevChapterIndexRef = useRef(progress?.currentChapterIndex ?? 0)
-    const lastSaveTimeRef = useRef(Date.now())
+    // Init Player
+    useEffect(() => {
+        if (currentStory?.id !== story.id) {
+            play(story as any, progress?.currentChapterIndex ?? 0, progress?.currentTime)
 
-	const currentChapter = story.chapters[currentChapterIndex]
-	const hasNextChapter = currentChapterIndex < story.chapters.length - 1
-	const hasPrevChapter = currentChapterIndex > 0
-
-    const maxChaptersToPlay = parentSettings?.maxChaptersToPlay ?? 1
-    const showFullControls = parentSettings?.showFullControls ?? false
-
-    const chapterDuration = currentChapter ? (currentChapter.endTime ?? 0) - currentChapter.startTime : 0
-
-    const isVideo = story.audio?.contentType?.startsWith('video/')
+            // Safety net: Ensure seek happens even if race condition occurs
+            if (progress?.currentTime) {
+                const t = progress.currentTime
+                setTimeout(() => seek(t), 100)
+                setTimeout(() => seek(t), 500) // Double tap to be sure
+            }
+        }
+    }, [story, play, currentStory, progress, seek])
 
     // Secret menu trigger
     const handleTitleClick = () => {
         setTitleTapCount(prev => {
             const newCount = prev + 1
-            if (newCount >= 5) { // 5 taps to trigger
-                navigate(`/settings/parent?storyId=${story.id}`)
+            if (newCount >= 5) {
+                navigate(`/admin/parent?storyId=${story.id}`)
                 return 0
             }
             return newCount
         })
-        // Reset tap count after 2 seconds if not triggered
         setTimeout(() => setTitleTapCount(0), 2000)
     }
 
-    // Handle limit reached
-    useEffect(() => {
-        if (fetcher.data && 'limitReached' in (fetcher.data as any) && (fetcher.data as any).limitReached) {
-            const reason = (fetcher.data as any).reason
-            navigate(`/timeout?reason=${encodeURIComponent(reason || 'Limit Reached')}`)
-        }
-    }, [fetcher.data, navigate])
+	const currentChapter = story.chapters[currentChapterIndex] || story.chapters[0]
+	const hasNextChapter = currentChapterIndex < story.chapters.length - 1
+	const hasPrevChapter = currentChapterIndex > 0
 
-	// Effect to handle play/pause
-	useEffect(() => {
-		if (mediaRef.current) {
-			if (isPlaying) {
-				mediaRef.current.play().catch(console.error)
-                lastSaveTimeRef.current = Date.now() // Reset time tracking on play
-			} else {
-				mediaRef.current.pause()
-			}
-		}
-	}, [isPlaying])
+    const showFullControls = parentSettings?.showFullControls ?? false
 
-    // Effect: Restore Progress ONCE
-	useEffect(() => {
-		if (mediaRef.current && progress && !hasRestored) {
-            const time = progress.currentTime
-            if (time > 0) {
-                mediaRef.current.currentTime = time
-            }
-            setHasRestored(true)
-		} else if (!progress && !hasRestored) {
-            setHasRestored(true)
-        }
-	}, [progress, hasRestored])
+    const chapterDuration = currentChapter ? (currentChapter.endTime ?? 0) - currentChapter.startTime : 0
+    const currentProgress = Math.max(0, currentTime - (currentChapter?.startTime || 0))
 
-    // Effect: Handle Chapter Changes (Navigation)
-    useEffect(() => {
-        if (!hasRestored) return // Wait for restoration first
-
-        if (prevChapterIndexRef.current !== currentChapterIndex) {
-             if (mediaRef.current && currentChapter) {
-                 mediaRef.current.currentTime = currentChapter.startTime
-             }
-             prevChapterIndexRef.current = currentChapterIndex
-             // Reset progress bar visual
-             setCurrentProgress(0)
-        }
-    }, [currentChapterIndex, currentChapter, hasRestored])
-
-
-    // Save progress function
-    const saveProgress = () => {
-        if (mediaRef.current && story.id) {
-            const time = mediaRef.current.currentTime
-
-            let increment = 0
-            if (isPlaying) {
-                const now = Date.now()
-                increment = Math.round((now - lastSaveTimeRef.current) / 1000)
-                if (increment > 60) increment = 10 // Safety cap
-                if (increment < 0) increment = 0
-                lastSaveTimeRef.current = now
-            }
-
-            fetcher.submit({
-                currentChapterIndex: String(currentChapterIndex),
-                currentTime: String(time),
-                increment: String(increment)
-            }, { method: 'post' })
-        }
-    }
-
-    // Auto-save progress periodically
-    useEffect(() => {
-        const interval = setInterval(() => {
-            if (isPlaying) {
-                saveProgress()
-            }
-        }, 10000) // Save every 10 seconds
-        return () => clearInterval(interval)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isPlaying, currentChapterIndex])
-
-	const togglePlay = () => {
-        if (isPlaying) {
-            saveProgress() // Save when pausing
-            setIsPlaying(false)
-        } else {
-            // Check if we are at the end of the chapter and need to advance manually
-            if (mediaRef.current && currentChapter && currentChapter.endTime && mediaRef.current.currentTime >= currentChapter.endTime - 0.5) {
-                if (hasNextChapter) {
-                    setSessionChaptersPlayed(0)
-                    nextChapter()
-                } else {
-                    mediaRef.current.currentTime = currentChapter.startTime
-                    setIsPlaying(true)
-                }
-            } else {
-                setIsPlaying(true)
-            }
-        }
-	}
-
-	const nextChapter = () => {
-		if (hasNextChapter) {
-            saveProgress() // Save before switching
-			setCurrentChapterIndex(currentChapterIndex + 1)
-			setIsPlaying(true)
-		}
-	}
-
-	const prevChapter = () => {
-		if (hasPrevChapter) {
-            saveProgress() // Save before switching
-			setCurrentChapterIndex(currentChapterIndex - 1)
-            setIsPlaying(true)
-		}
-	}
+    const isVideo = story.audio?.contentType?.startsWith('video/')
 
     const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
         const seekTime = Number(e.target.value)
-        if (mediaRef.current && currentChapter) {
+        if (currentChapter) {
             const newTime = currentChapter.startTime + seekTime
-            mediaRef.current.currentTime = newTime
-            setCurrentProgress(seekTime)
+            seek(newTime)
         }
     }
 
-	const onTimeUpdate = () => {
-		if (!mediaRef.current || !currentChapter) return
-
-        // Update progress bar state
-        const relativeTime = mediaRef.current.currentTime - currentChapter.startTime
-        // Clamp to 0 and duration
-        const clampedTime = Math.max(0, Math.min(relativeTime, chapterDuration))
-        setCurrentProgress(clampedTime)
-
-		// Check if we passed the end of the current chapter
-		if (currentChapter.endTime && mediaRef.current.currentTime >= currentChapter.endTime) {
-            const newSessionCount = sessionChaptersPlayed + 1
-            setSessionChaptersPlayed(newSessionCount)
-
-            if (newSessionCount >= maxChaptersToPlay) {
-                setIsPlaying(false)
-                mediaRef.current.pause()
-            } else if (hasNextChapter) {
-                nextChapter()
-            } else {
-                setIsPlaying(false)
-                mediaRef.current.pause()
+    // Sync Video Time with Context (to trigger progress saves)
+    const onVideoTimeUpdate = () => {
+        if (videoRef.current) {
+            const t = videoRef.current.currentTime
+            // Ignore 0 if we are restoring a saved time
+            if (t === 0 && progress?.currentTime && progress.currentTime > 1) {
+                return
             }
-            saveProgress()
-		}
-	}
+            seek(t)
+        }
+    }
 
-    // Render Video Player
-    if (isVideo) {
-        return (
-            <div className="flex min-h-screen flex-col bg-black text-white">
+    // Force Video Restore
+    useEffect(() => {
+        const video = videoRef.current
+        const savedTime = progress?.currentTime
+
+        if (!video || !savedTime || savedTime < 1) return
+
+        const restore = () => {
+             if (Math.abs(video.currentTime - savedTime) > 1) {
+                 video.currentTime = savedTime
+             }
+        }
+
+        if (video.readyState >= 1) {
+            restore()
+        } else {
+            video.addEventListener('loadedmetadata', restore, { once: true })
+        }
+
+        return () => {
+            video.removeEventListener('loadedmetadata', restore)
+        }
+    }, [progress?.currentTime]) // Re-run if progress changes (unlikely unless nav)
+
+    // Effect to sync video play/pause state with context
+    useEffect(() => {
+        if (isVideo && videoRef.current) {
+            if (isPlaying) videoRef.current.play().catch(console.error)
+            else videoRef.current.pause()
+        }
+    }, [isPlaying, isVideo])
+
+            // Render Video Player
+            if (isVideo) {
+                return (
+                    <div className="flex min-h-screen flex-col bg-black text-white relative">
                 {/* Header Overlay */}
                 <div className="absolute top-0 left-0 right-0 z-50 flex items-center p-4 bg-gradient-to-b from-black/70 to-transparent">
                     <Link
@@ -468,14 +293,15 @@ export default function StoryPlayer() {
                 <div className="flex-1 flex items-center justify-center relative">
                     {story.audio?.id && (
                         <video
-                            ref={mediaRef as React.RefObject<HTMLVideoElement>}
+                            key={story.id}
+                            ref={videoRef}
                             src={`/resources/audio-files/${story.audio.id}`}
-                            onTimeUpdate={onTimeUpdate}
-                            controls // Use native controls for video
+                            onTimeUpdate={onVideoTimeUpdate}
+                            controls
                             className="max-w-full max-h-screen w-full aspect-video"
                             playsInline
-                            onPlay={() => setIsPlaying(true)}
-                            onPause={() => setIsPlaying(false)}
+                            onPlay={resume}
+                            onPause={pause}
                         />
                     )}
                 </div>
@@ -483,9 +309,9 @@ export default function StoryPlayer() {
         )
     }
 
-    // Render Audiobook Player
-	return (
-		<div className="flex min-h-screen flex-col bg-orange-50 dark:bg-stone-950 transition-colors">
+            // Render Audiobook Player
+            return (
+                <div className="flex min-h-screen flex-col bg-orange-50 dark:bg-stone-950 transition-colors relative">
 			{/* Header */}
 			<div className="flex items-center p-4 relative">
 				<Link
@@ -518,13 +344,7 @@ export default function StoryPlayer() {
                                 {story.chapters.map((chapter, index) => (
                                     <SheetClose key={chapter.id} asChild>
                                         <button
-                                            onClick={() => {
-                                                if (currentChapterIndex !== index) {
-                                                    setCurrentChapterIndex(index)
-                                                    setIsPlaying(true)
-                                                    setSessionChaptersPlayed(0)
-                                                }
-                                            }}
+                                            onClick={() => play(story as any, index)}
                                             className={cn(
                                                 "w-full text-left p-4 rounded-xl transition-all text-base font-medium border mb-2 dark:border-transparent",
                                                 index === currentChapterIndex
@@ -563,7 +383,7 @@ export default function StoryPlayer() {
 
 					{/* Play/Pause Overlay Button */}
 					<button
-						onClick={togglePlay}
+						onClick={isPlaying ? pause : resume}
 						className={cn(
 							"absolute inset-0 flex items-center justify-center bg-black/20 transition-all active:scale-95",
 							!isPlaying && "bg-black/40"
@@ -620,7 +440,7 @@ export default function StoryPlayer() {
                     )}
 
 					<button
-						onClick={togglePlay}
+						onClick={isPlaying ? pause : resume}
 						className="rounded-full bg-orange-500 dark:bg-orange-600 p-6 shadow-lg text-white transition-transform hover:scale-105 active:scale-95"
 					>
 						{isPlaying ? (
@@ -643,15 +463,19 @@ export default function StoryPlayer() {
                     )}
 				</div>
 
-				{story.audio?.id && (
-					<audio
-						ref={mediaRef as React.RefObject<HTMLAudioElement>}
-						src={`/resources/audio-files/${story.audio.id}`}
-						onTimeUpdate={onTimeUpdate}
-						controls={false}
-                        preload="metadata"
-					/>
-				)}
+                {/* Volume Control */}
+                <div className="mt-6 w-full max-w-[240px] flex items-center gap-3 bg-white/50 dark:bg-stone-900/50 p-3 rounded-xl backdrop-blur-sm shadow-sm">
+                    <div className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider mr-1">Vol</div>
+                    <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={volume}
+                        onChange={(e) => setVolume(Number(e.target.value))}
+                        className="flex-1 h-2 bg-orange-200 dark:bg-stone-700 rounded-lg appearance-none cursor-pointer accent-orange-600 dark:accent-orange-500"
+                    />
+                    <div className="text-xs font-mono text-orange-600 dark:text-orange-400 w-8 text-right">{volume}%</div>
+                </div>
 			</div>
 		</div>
 	)

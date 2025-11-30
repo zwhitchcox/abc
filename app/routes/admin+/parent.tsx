@@ -7,6 +7,7 @@ import { Input } from '#app/components/ui/input.tsx'
 import { Label } from '#app/components/ui/label.tsx'
 import { ThemeSwitch, useOptionalTheme } from '#app/routes/resources+/theme-switch.tsx'
 import { requireUserId } from '#app/utils/auth.server.ts'
+import { requireUserWithRole } from '#app/utils/permissions.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 
 const TIMEZONES = [
@@ -22,6 +23,7 @@ const TIMEZONES = [
 ]
 
 export async function loader({ request }: LoaderFunctionArgs) {
+    await requireUserWithRole(request, 'admin')
     const userId = await requireUserId(request)
     const url = new URL(request.url)
     const storyId = url.searchParams.get('storyId')
@@ -76,6 +78,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+    await requireUserWithRole(request, 'admin')
     const userId = await requireUserId(request)
     const formData = await request.formData()
     const intent = formData.get('intent')
@@ -85,11 +88,16 @@ export async function action({ request }: ActionFunctionArgs) {
         const showFullControls = formData.get('showFullControls') === 'on'
         const timeZone = String(formData.get('timeZone'))
         const maxVolume = Number(formData.get('maxVolume'))
+        const globalLimitMinutes = Number(formData.get('globalLimitMinutes'))
+        const globalIntervalHours = Number(formData.get('globalIntervalHours'))
+
+        const globalLimitSeconds = globalLimitMinutes > 0 ? globalLimitMinutes * 60 : null
+        const globalIntervalSeconds = globalIntervalHours > 0 ? globalIntervalHours * 3600 : 86400
 
         await prisma.parentSettings.upsert({
             where: { userId },
-            update: { maxChaptersToPlay, showFullControls, timeZone, maxVolume },
-            create: { userId, maxChaptersToPlay, showFullControls, timeZone, maxVolume }
+            update: { maxChaptersToPlay, showFullControls, timeZone, maxVolume, globalLimitSeconds, globalIntervalSeconds },
+            create: { userId, maxChaptersToPlay, showFullControls, timeZone, maxVolume, globalLimitSeconds, globalIntervalSeconds }
         })
         return json({ success: true })
     }
@@ -185,6 +193,34 @@ export default function ParentSettings() {
                         }}
                     />
                     <p className="text-xs text-muted-foreground">Sets the upper limit for the child's volume control.</p>
+                </div>
+
+                <div className="space-y-2 pt-4 border-t">
+                    <h3 className="font-medium text-sm">Global Time Limit</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                             <Label htmlFor="globalLimitMinutes">Limit (Minutes)</Label>
+                             <Input
+                                type="number"
+                                id="globalLimitMinutes"
+                                name="globalLimitMinutes"
+                                defaultValue={settings?.globalLimitSeconds ? Math.floor(settings.globalLimitSeconds / 60) : ''}
+                                placeholder="Unlimited"
+                                min="0"
+                            />
+                        </div>
+                        <div>
+                             <Label htmlFor="globalIntervalHours">Reset Every (Hours)</Label>
+                             <Input
+                                type="number"
+                                id="globalIntervalHours"
+                                name="globalIntervalHours"
+                                defaultValue={settings?.globalIntervalSeconds ? Math.floor(settings.globalIntervalSeconds / 3600) : 24}
+                                min="1"
+                            />
+                        </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Applies to all content regardless of tags.</p>
                 </div>
 
                 <div className="space-y-2">

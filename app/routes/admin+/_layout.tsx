@@ -1,7 +1,7 @@
+import { type LoaderFunctionArgs, json } from '@remix-run/node'
 import { Outlet, Link, useLocation } from '@remix-run/react'
 import { Icon } from '#app/components/ui/icon.tsx'
 import { requireUserWithRole } from '#app/utils/permissions.server.ts'
-import { type LoaderFunctionArgs, json } from '@remix-run/node'
 
 export async function loader({ request }: LoaderFunctionArgs) {
     await requireUserWithRole(request, 'admin')
@@ -29,7 +29,7 @@ export default function AdminLayout() {
                 </h1>
                 <div className="ml-auto flex gap-4">
                     <Link to="/stories" className="text-sm font-medium text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400 transition-colors flex items-center gap-2">
-                        <Icon name="open-in-new-window" className="h-4 w-4" />
+                        <Icon name="link-2" className="h-4 w-4" />
                         View Library
                     </Link>
                 </div>

@@ -38,9 +38,12 @@ model ParentSettings {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   userId String @unique
 
-  maxChaptersToPlay Int     @default(1)
-  showFullControls  Boolean @default(false)
-  timeZone          String  @default("UTC")
+  maxChaptersToPlay     Int     @default(1)
+  showFullControls      Boolean @default(false)
+  timeZone              String  @default("UTC")
+  maxVolume             Int     @default(100)
+  globalLimitSeconds    Int?
+  globalIntervalSeconds Int     @default(86400) // 24 hours
 }
 
 model Note {

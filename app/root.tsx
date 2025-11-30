@@ -16,6 +16,7 @@ import {
 } from '@remix-run/react'
 import { withSentry } from '@sentry/remix'
 import { HoneypotProvider } from 'remix-utils/honeypot/react'
+import { PlayerProvider } from '#app/context/player.tsx'
 import appleTouchIconAssetUrl from './assets/favicons/apple-touch-icon.png'
 import faviconAssetUrl from './assets/favicons/favicon.svg'
 import { AppSidebar } from './components/app-sidebar.tsx'
@@ -217,6 +218,7 @@ function App() {
     const showSidebarTrigger = !isStories
 
 	return (
+        <PlayerProvider>
 		<>
 			{isFullScreen ? (
 				<SidebarProvider defaultOpen={false}>
@@ -234,6 +236,7 @@ function App() {
 			<EpicToaster closeButton position="top-center" theme={theme} />
 			<EpicProgress />
 		</>
+        </PlayerProvider>
 	)
 }
 

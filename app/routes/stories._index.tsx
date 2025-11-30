@@ -22,22 +22,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
         orderBy: { name: 'asc' }
     })
 
-    const uncategorizedStories = await prisma.story.findMany({
-        where: { tags: { none: {} } },
-        include: {
-            images: { take: 1 },
-            tags: { select: { id: true } }
-        },
-        orderBy: { createdAt: 'desc' }
-    })
 
     const parentSettings = userId ? await prisma.parentSettings.findUnique({ where: { userId } }) : null
     const timeZone = parentSettings?.timeZone || 'UTC'
 
     const tagStatus: Record<string, { restricted: boolean, availableAt: string | null, reason?: string }> = {}
+    let globalRestriction: string | null = null
 
     if (userId) {
         const now = new Date()
+
+        // Check Global Limit
+        if (parentSettings?.globalLimitSeconds) {
+             const windowStart = new Date(now.getTime() - parentSettings.globalIntervalSeconds * 1000)
+             const globalLogs = await prisma.usageLog.findMany({
+                 where: {
+                     userId,
+                     createdAt: { gt: windowStart }
+                 }
+             })
+             const globalTotal = globalLogs.reduce((acc, log) => acc + log.secondsPlayed, 0)
+
+             if (globalTotal >= parentSettings.globalLimitSeconds) {
+                  globalRestriction = 'Global Time Limit Reached'
+             }
+        }
 
         for (const tag of tags) {
             // 1. Availability Check
@@ -101,7 +110,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }
     }
 
-    return json({ tags, uncategorizedStories, tagStatus })
+    return json({ tags, tagStatus, globalRestriction })
 }
 
 function CountdownOverlay({ availableAt, reason }: { availableAt: string | null, reason?: string }) {
@@ -156,17 +165,40 @@ function StoryCard({ story, tagStatus }: { story: any, tagStatus: Record<string,
     let restrictionAvailableAt: string | null = null
 
     if (story.tags.length > 0) {
-        // Permissive Mode: Access granted if ANY tag is open (not restricted)
-        const openTag = story.tags.find((tag: any) => !tagStatus[tag.id]?.restricted)
+        // Hybrid Logic:
+        // 1. Access: Need 1+ enabled tag (Not 'Disabled' reason)
+        // 2. Limits: Must NOT have any 'Restricted Hours' or 'Limit Reached' tags
 
-        if (openTag) {
+        let hasEnabledTag = false
+        let blockingReason: string | null = null
+        let blockingAvailableAt: string | null = null
+
+        for (const tag of story.tags) {
+            const status = tagStatus[tag.id]
+            const isTagDisabled = status?.reason === 'Disabled'
+            const isTagRestricted = status?.restricted && !isTagDisabled
+
+            if (!isTagDisabled) {
+                hasEnabledTag = true
+            }
+
+            if (isTagRestricted) {
+                blockingReason = status?.reason || 'Restricted'
+                blockingAvailableAt = status?.availableAt || null
+                break // Restrictive: One strike and you're out
+            }
+        }
+
+        if (blockingReason) {
+            isRestricted = true
+            restrictionReason = blockingReason
+            restrictionAvailableAt = blockingAvailableAt
+        } else if (!hasEnabledTag) {
+            isRestricted = true
+            restrictionReason = 'Disabled'
+        } else {
             isRestricted = false
             restrictionReason = ''
-        } else {
-            // All tags restricted. Pick status from first tag as representative
-            const firstStatus = tagStatus[story.tags[0].id]
-            restrictionReason = firstStatus?.reason || 'Restricted'
-            restrictionAvailableAt = firstStatus?.availableAt || null
         }
     }
 
@@ -218,7 +250,19 @@ function StoryCard({ story, tagStatus }: { story: any, tagStatus: Record<string,
 }
 
 export default function StoriesIndex() {
-    const { tags, uncategorizedStories, tagStatus } = useLoaderData<typeof loader>()
+    const { tags, tagStatus, globalRestriction } = useLoaderData<typeof loader>()
+
+    if (globalRestriction) {
+        return (
+            <div className="min-h-screen bg-stone-900 text-white flex flex-col items-center justify-center p-8 text-center">
+                 <Icon name="clock" className="h-24 w-24 text-orange-500 mb-6 animate-pulse" />
+                 <h1 className="text-4xl font-bold mb-4 font-comic">Time's Up!</h1>
+                 <p className="text-xl text-stone-400 mb-8 max-w-md">
+                     You've used all your screen time for now. Come back later!
+                 </p>
+            </div>
+        )
+    }
 
     return (
         <div className="min-h-screen bg-orange-50 dark:bg-stone-950 p-8 transition-colors pb-32">
@@ -261,21 +305,8 @@ export default function StoriesIndex() {
                     )
                 })}
 
-                {/* Uncategorized (Always Restricted now) */}
-                {uncategorizedStories.length > 0 && (
-                    <div>
-                        <h2 className="text-2xl font-bold text-orange-900 dark:text-orange-100 mb-4 px-4">
-                            Uncategorized (Restricted)
-                        </h2>
-                        <div className="grid grid-cols-2 gap-6 md:grid-cols-3 lg:grid-cols-4">
-                            {uncategorizedStories.map(story => (
-                                <StoryCard key={story.id} story={story} tagStatus={tagStatus} />
-                            ))}
-                        </div>
-                    </div>
-                )}
 
-                {tags.every(t => t.stories.length === 0) && uncategorizedStories.length === 0 && (
+                {tags.every(t => t.stories.length === 0) && (
                     <div className="text-center text-xl text-gray-500 dark:text-stone-400 mt-12">
                         No stories found. Ask your parent to upload some!
                     </div>
