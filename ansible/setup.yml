@@ -4,6 +4,7 @@
   vars:
     node_major: 24
     app_dir: /opt/zephyr
+    domain: abc.zwhitchcox.dev
 
   tasks:
     - name: Update apt cache
@@ -27,13 +28,11 @@
     - name: Add NodeSource repository
       shell: |
         curl -fsSL https://deb.nodesource.com/setup_{{ node_major }}.x | bash -
-      args:
-        creates: /etc/apt/sources.list.d/nodesource.list
 
     - name: Install Node.js
       apt:
         name: nodejs
-        state: present
+        state: latest
 
     - name: Install PM2 globally
       npm:
@@ -43,6 +42,11 @@
     - name: Install pnpm globally
       npm:
         name: pnpm
+        global: yes
+
+    - name: Install tsx globally
+      npm:
+        name: tsx
         global: yes
 
     - name: Install yt-dlp
@@ -69,7 +73,50 @@
       shell: npx playwright install-deps chromium
       environment:
         npm_config_prefix: /usr/local
-      # This might fail if run as root without --unsafe-perm or similar context, but usually fine.
-      # Alternatively, install standard deps manually.
       ignore_errors: yes
 
+    - name: Install Nginx and Certbot
+      apt:
+        name:
+          - nginx
+          - certbot
+          - python3-certbot-nginx
+        state: present
+
+    - name: Create Nginx configuration
+      copy:
+        dest: /etc/nginx/sites-available/zephyr
+        content: |
+          server {
+              listen 80;
+              server_name {{ domain }};
+              client_max_body_size 100M;
+
+              location / {
+                  proxy_pass http://localhost:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+
+    - name: Enable Nginx site
+      file:
+        src: /etc/nginx/sites-available/zephyr
+        dest: /etc/nginx/sites-enabled/zephyr
+        state: link
+
+    - name: Remove default Nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Reload Nginx
+      service:
+        name: nginx
+        state: reloaded
