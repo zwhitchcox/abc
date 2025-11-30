@@ -45,10 +45,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const fetcher = useFetcher()
+    const fetcherRef = useRef(fetcher)
+    useEffect(() => { fetcherRef.current = fetcher }, [fetcher])
+
     const navigate = useNavigate()
     const location = useLocation()
     const lastSaveTimeRef = useRef(Date.now())
     const restoreTimeRef = useRef<number | null>(null)
+    const handledDataRef = useRef<any>(null)
 
     const currentChapter = currentStory?.chapters[currentChapterIndex]
 
@@ -79,7 +83,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             data.append('isPlaying', String(status))
             navigator.sendBeacon('/resources/player', data)
         } else {
-            fetcher.submit({
+            fetcherRef.current.submit({
                 intent: 'track-usage',
                 storyId: currentStory.id,
                 currentTime: String(time),
@@ -88,7 +92,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 isPlaying: String(status)
             }, { method: 'post', action: '/resources/player' })
         }
-    }, [fetcher])
+    }, []) // Removed fetcher dependency
 
     // Sync Volume
     useEffect(() => {
@@ -119,11 +123,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     // Handle Limit Reached
     useEffect(() => {
-        if (fetcher.data && (fetcher.data as any).limitReached) {
-            pause()
-            navigate(`/timeout?reason=${(fetcher.data as any).reason}`)
+        if (fetcher.data && fetcher.data !== handledDataRef.current) {
+            handledDataRef.current = fetcher.data
+            if ((fetcher.data as any).limitReached) {
+                pause()
+                navigate(`/timeout?reason=${(fetcher.data as any).reason}`)
+            }
         }
-    }, [fetcher.data, navigate])
+    }, [fetcher.data, navigate, pause])
 
     // Playback Logic
     const play = useCallback((story: Story, startChapter = 0, startTime?: number) => {
