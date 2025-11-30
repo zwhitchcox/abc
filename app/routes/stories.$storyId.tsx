@@ -32,6 +32,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 				select: {
 					id: true,
 					altText: true,
+                    updatedAt: true,
 				},
 				take: 1,
 			},
@@ -236,6 +237,13 @@ export default function StoryPlayer() {
         if (parentSettings?.maxVolume) setMaxVolume(parentSettings.maxVolume)
     }, [parentSettings, setMaxVolume])
 
+    // Pause on unmount (leaving the page)
+    useEffect(() => {
+        return () => {
+            pause()
+        }
+    }, [pause])
+
     // Init Player
     useEffect(() => {
         if (currentStory?.id !== story.id) {
@@ -429,7 +437,7 @@ export default function StoryPlayer() {
 				<div className="relative aspect-square w-full max-w-md overflow-hidden rounded-3xl shadow-2xl">
 					{story.images[0] ? (
 						<img
-							src={`/resources/story-images/${story.images[0].id}`}
+							src={`/resources/story-images/${story.images[0].id}?t=${new Date(story.images[0].updatedAt).getTime()}`}
 							alt={story.images[0].altText ?? story.title}
 							className="h-full w-full object-cover"
 						/>

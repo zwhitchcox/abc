@@ -223,6 +223,7 @@ model Tag {
   intervalSeconds Int  @default(86400)
 
   enabled              Boolean @default(true)
+  isDefault            Boolean @default(false)
   restrictedHoursStart Int?
   restrictedHoursEnd   Int?
 

@@ -384,6 +384,7 @@ export default function NewStory() {
                                             type="checkbox"
                                             name="tagIds"
                                             value={tag.id}
+                                            defaultChecked={tag.isDefault}
                                             className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
                                         />
                                         <span className="text-sm">{tag.name}</span>

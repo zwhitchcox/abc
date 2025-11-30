@@ -25,7 +25,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             },
             images: {
                 take: 1,
-                select: { id: true }
+                select: { id: true, updatedAt: true }
             },
             tags: {
                 select: { id: true, name: true }
@@ -127,7 +127,7 @@ export default function StoriesAdminRoute() {
                                 {/* Thumbnail */}
                                         <div className="h-16 w-16 rounded-lg overflow-hidden bg-stone-200 shrink-0 border border-stone-200 dark:border-stone-700 relative">
                                             {story.images[0] ? (
-                                                <img src={`/resources/story-images/${story.images[0].id}`} alt="" className="h-full w-full object-cover" />
+                                                <img src={`/resources/story-images/${story.images[0].id}?t=${new Date(story.images[0].updatedAt).getTime()}`} alt="" className="h-full w-full object-cover" />
                                             ) : (
                                                 <div className="h-full w-full flex items-center justify-center text-stone-400">
                                                     <Icon name="camera" className="h-6 w-6" />

@@ -13,7 +13,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         include: {
             stories: {
                 include: {
-                    images: { take: 1 },
+                    images: {
+                        take: 1,
+                        select: { id: true, altText: true, updatedAt: true }
+                    },
                     tags: { select: { id: true } }
                 },
                 orderBy: { createdAt: 'desc' }
@@ -281,7 +284,7 @@ function StoryCard({ story, tagStatus, typeStatus }: {
         >
             {story.images[0] ? (
                 <img
-                    src={`/resources/story-images/${story.images[0].id}`}
+                    src={`/resources/story-images/${story.images[0].id}?t=${new Date(story.images[0].updatedAt).getTime()}`}
                     alt={story.images[0].altText ?? story.title}
                     className="h-full w-full object-cover"
                 />

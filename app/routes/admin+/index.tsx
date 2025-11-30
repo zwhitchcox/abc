@@ -29,7 +29,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         prisma.story.findMany({
             take: 5,
             orderBy: { createdAt: 'desc' },
-            select: { id: true, title: true, type: true, createdAt: true }
+            select: { id: true, title: true, type: true, createdAt: true, images: { take: 1, select: { id: true, updatedAt: true } } }
         }),
         prisma.usageLog.aggregate({ _sum: { secondsPlayed: true }, where: usageWhere }),
         prisma.storyProgress.findFirst({
@@ -40,7 +40,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                         id: true,
                         title: true,
                         type: true,
-                        images: { take: 1, select: { id: true } },
+                        images: { take: 1, select: { id: true, updatedAt: true } },
                         chapters: {
                             select: { id: true, title: true, order: true },
                             orderBy: { order: 'asc' }
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
                     {/* Cover */}
                     <div className="h-24 w-24 rounded-xl overflow-hidden bg-stone-200 shrink-0 border border-black/10 shadow-md relative">
                          {lastActivity.story.images[0] ? (
-                             <img src={`/resources/story-images/${lastActivity.story.images[0].id}`} alt="" className="h-full w-full object-cover" />
+                             <img src={`/resources/story-images/${lastActivity.story.images[0].id}?t=${new Date(lastActivity.story.images[0].updatedAt).getTime()}`} alt="" className="h-full w-full object-cover" />
                          ) : (
                              <div className="flex h-full w-full items-center justify-center text-stone-400"><Icon name="file-text" className="h-8 w-8" /></div>
                          )}
