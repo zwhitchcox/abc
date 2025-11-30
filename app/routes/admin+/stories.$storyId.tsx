@@ -1,5 +1,7 @@
+import path from 'node:path'
+import { spawn } from 'node:child_process'
 import { json, redirect, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/node'
-import { Form, useLoaderData, Link } from '@remix-run/react'
+import { Form, useLoaderData, Link, useActionData } from '@remix-run/react'
 import { useState } from 'react'
 import { type FileUpload, parseFormData } from '@mjackson/form-data-parser'
 import { Button } from '#app/components/ui/button.tsx'
@@ -54,6 +56,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
         uploadHandler
     )
 
+    const intent = formData.get('intent')
+
+    if (intent === 'split') {
+        const scriptPath = path.join(process.cwd(), 'scripts', 'split-m4b.ts')
+        console.log(`Spawning split script: ${scriptPath} for story ${params.storyId}`)
+
+        const child = spawn('npx', ['tsx', scriptPath, params.storyId], {
+            detached: true,
+            stdio: 'ignore'
+        })
+        child.unref()
+
+        return json({ message: 'Split process started. It may take a few minutes to complete.' })
+    }
+
     const title = String(formData.get('title'))
     const tagIds = formData.getAll('tagIds') as string[]
 
@@ -97,6 +114,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function EditStory() {
     const { story, tags } = useLoaderData<typeof loader>()
+    const actionData = useActionData<typeof action>()
     const [newCover, setNewCover] = useState<string | null>(null)
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,7 +129,16 @@ export default function EditStory() {
     return (
         <div className="container mx-auto p-6 max-w-2xl">
             <h1 className="text-3xl font-bold mb-8">Edit Story</h1>
+
+            {actionData && 'message' in actionData && (
+                <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 rounded-lg border border-blue-200 dark:border-blue-800 flex items-center gap-2">
+                    <Icon name="check" className="h-5 w-5" />
+                    {actionData.message}
+                </div>
+            )}
+
             <Form method="POST" className="space-y-6" encType="multipart/form-data">
+                <input type="hidden" name="intent" value="update" />
                 <div>
                     <Label htmlFor="title">Title</Label>
                     <Input id="title" name="title" defaultValue={story.title} required />
@@ -180,6 +207,26 @@ export default function EditStory() {
                     </div>
                 </div>
             </Form>
+
+            {story.type === 'audiobook' && (
+                <div className="mt-12 pt-8 border-t border-stone-200 dark:border-stone-800">
+                    <h3 className="text-lg font-bold mb-4 text-stone-800 dark:text-stone-100">Advanced Actions</h3>
+                    <div className="p-6 bg-stone-50 dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800">
+                        <h4 className="font-semibold mb-2 text-stone-700 dark:text-stone-200">Split into Individual Stories</h4>
+                        <p className="text-sm text-muted-foreground mb-4">
+                            This will process the audiobook file and create a new Story entry for each chapter found.
+                            It will attempt to download cover art for each chapter. This process runs in the background.
+                        </p>
+                        <Form method="POST">
+                            <input type="hidden" name="intent" value="split" />
+                            <Button type="submit" variant="secondary" className="bg-white dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-700 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300">
+                                <Icon name="file-text" className="mr-2 h-4 w-4" />
+                                Start Split Process
+                            </Button>
+                        </Form>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

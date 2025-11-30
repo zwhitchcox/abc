@@ -121,17 +121,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         return () => window.removeEventListener('pagehide', handleUnload)
     }, [saveProgress])
 
-    // Handle Limit Reached
-    useEffect(() => {
-        if (fetcher.data && fetcher.data !== handledDataRef.current) {
-            handledDataRef.current = fetcher.data
-            if ((fetcher.data as any).limitReached) {
-                pause()
-                navigate(`/timeout?reason=${(fetcher.data as any).reason}`)
-            }
-        }
-    }, [fetcher.data, navigate, pause])
-
     // Playback Logic
     const play = useCallback((story: Story, startChapter = 0, startTime?: number) => {
         if (currentStory?.id !== story.id) {
@@ -216,6 +205,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             }
         }
     }
+
+    // Handle Limit Reached
+    useEffect(() => {
+        if (fetcher.data && fetcher.data !== handledDataRef.current) {
+            handledDataRef.current = fetcher.data
+            if ((fetcher.data as any).limitReached) {
+                pause()
+                navigate(`/timeout?reason=${(fetcher.data as any).reason}`)
+            }
+        }
+    }, [fetcher.data, navigate, pause])
 
     const value = {
         currentStory,
