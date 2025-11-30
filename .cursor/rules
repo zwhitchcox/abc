@@ -1,0 +1,3 @@
+Don't ask to deploy, CI will deploy
+Use pnpm prisma db push instead of migrate dev
+Run pnpm typecheck if you think you might have introduced type errors after a change

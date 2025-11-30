@@ -28,6 +28,10 @@ export default function AdminLayout() {
                     {isDashboard ? 'Admin Dashboard' : 'Admin Area'}
                 </h1>
                 <div className="ml-auto flex gap-4">
+                    <Link to="/admin/settings" className="text-sm font-medium text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400 transition-colors flex items-center gap-2">
+                        <Icon name="dots-horizontal" className="h-4 w-4" />
+                        Settings
+                    </Link>
                     <Link to="/stories" className="text-sm font-medium text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400 transition-colors flex items-center gap-2">
                         <Icon name="link-2" className="h-4 w-4" />
                         View Library

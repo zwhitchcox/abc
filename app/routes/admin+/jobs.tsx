@@ -1,10 +1,10 @@
 import { json, type LoaderFunctionArgs } from '@remix-run/node'
-import { useLoaderData, useRevalidator } from '@remix-run/react'
+import { Link, useLoaderData, useRevalidator } from '@remix-run/react'
 import { useEffect } from 'react'
-import { prisma } from '#app/utils/db.server.ts'
-import { requireUserWithRole } from '#app/utils/permissions.server.ts'
 import { Icon } from '#app/components/ui/icon.tsx'
+import { prisma } from '#app/utils/db.server.ts'
 import { cn } from '#app/utils/misc.tsx'
+import { requireUserWithRole } from '#app/utils/permissions.server.ts'
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	await requireUserWithRole(request, 'admin')
@@ -115,10 +115,20 @@ function safeParse(jsonString: string | null): Record<string, any> | null {
 function JobDetails({ job }: { job: any }) {
     const result = safeParse(job.result) as Record<string, any> | null
 
-    if (job.status === 'failed') {
-        return <span className="text-red-500 text-xs break-words">{result?.error || 'Unknown error'}</span>
-    }
-    
+	if (job.status === 'failed') {
+		const isBotError = result?.error?.includes('bot')
+		return (
+			<div className="flex flex-col gap-1">
+				<span className="text-red-500 text-xs break-words">{result?.error || 'Unknown error'}</span>
+				{isBotError && (
+					<Link to="/admin/settings" className="text-xs text-blue-500 hover:underline">
+						Update Cookies
+					</Link>
+				)}
+			</div>
+		)
+	}
+
     if (job.status === 'completed') {
         return (
             <div className="text-xs space-y-1">

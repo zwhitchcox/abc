@@ -424,7 +424,7 @@ export async function action({ request }: ActionFunctionArgs) {
                                     message: `Processing video ${i + 1}/${videoUrls.length} from playlist`,
                                     processed: processedCount,
                                     total: totalVideos,
-                                    currentUrl: videoUrl as string | undefined 
+                                    currentUrl: videoUrl as string | undefined
                                 })
 
                                 try {
@@ -447,8 +447,17 @@ export async function action({ request }: ActionFunctionArgs) {
                                 } catch (e) {
                                     console.error(`Failed to download video ${videoUrl}:`, e)
                                     failed++
-                                    results.push({ url: videoUrl, status: 'failed', error: String(e) })
-                                    // Continue to next video
+                                    const errorMsg = String(e)
+                                    results.push({ url: videoUrl, status: 'failed', error: errorMsg })
+
+                                    // Abort if bot detection
+                                    if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('bot')) {
+                                        console.error('Bot detection triggered, aborting playlist.')
+                                        const updateCookiesUrl = `/admin/settings`
+                                        await failJob(job.id, new Error(`Bot detection triggered by YouTube. Please <a href="${updateCookiesUrl}" class="underline text-blue-500 hover:text-blue-700">update cookies</a>.`))
+                                        return // Exit the background function entirely
+                                    }
+                                    // Continue to next video otherwise
                                 }
                                 processedCount++
                             }
@@ -469,7 +478,7 @@ export async function action({ request }: ActionFunctionArgs) {
                         }
                     } else {
                         const progressPercent = Math.round((processedCount / totalVideos) * 100)
-                        await updateJobProgress(job.id, `${progressPercent}%`, { 
+                        await updateJobProgress(job.id, `${progressPercent}%`, {
                             message: `Processing video...`,
                             processed: processedCount,
                             total: totalVideos,
