@@ -200,7 +200,9 @@ async function processReadAloud(
         '--convert-thumbnails', 'jpg',
         '--force-ipv6',
         '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-        '--no-playlist'
+        '--no-playlist',
+        '--limit-rate', '5M',
+        '--sleep-requests', '1.5'
     ]
 
     const cookiesPath = path.join(process.cwd(), 'data', 'cookies.txt')
@@ -429,15 +431,16 @@ export async function action({ request }: ActionFunctionArgs) {
                                     else skipped++
                                     results.push({ url: videoUrl, status: downloaded ? 'downloaded' : 'skipped' })
 
-                                    // Wait 1 minute between downloads to avoid rate limits, unless it's the last one
+                                    // Wait random time between 30s and 90s between downloads
                                     if (downloaded && i < videoUrls.length - 1) {
-                                        console.log('Waiting 1 minute before next download to avoid rate limits...')
+                                        const waitTimeSeconds = Math.floor(Math.random() * (90 - 30 + 1) + 30)
+                                        console.log(`Waiting ${waitTimeSeconds} seconds before next download to avoid rate limits...`)
                                         await updateJobProgress(job.id, `${progressPercent}%`, {
-                                            message: `Waiting 1m before next video...`,
+                                            message: `Waiting ${waitTimeSeconds}s before next video...`,
                                             processed: processedCount + 1,
                                             total: totalVideos
                                         })
-                                        await new Promise(resolve => setTimeout(resolve, 60000))
+                                        await new Promise(resolve => setTimeout(resolve, waitTimeSeconds * 1000))
                                     }
                                 } catch (e) {
                                     console.error(`Failed to download video ${videoUrl}:`, e)
