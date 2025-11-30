@@ -106,7 +106,7 @@ function StatusBadge({ status }: { status: string }) {
 function safeParse(jsonString: string | null): Record<string, any> | null {
 	if (!jsonString) return null
 	try {
-		return JSON.parse(jsonString)
+		return JSON.parse(jsonString) as Record<string, any>
 	} catch {
 		return null
 	}
