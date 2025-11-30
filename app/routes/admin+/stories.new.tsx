@@ -90,6 +90,40 @@ async function ensureYtDlp() {
     }
 }
 
+async function expandPlaylist(url: string): Promise<string[]> {
+    const binaryPath = await ensureYtDlp()
+    const args = [
+        '--flat-playlist',
+        '--print', 'url',
+        url,
+        '--force-ipv6',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    ]
+
+    const cookiesPath = path.join(process.cwd(), 'data', 'cookies.txt')
+    if (fs.existsSync(cookiesPath)) {
+        args.push('--cookies', cookiesPath)
+    }
+
+    return new Promise((resolve, reject) => {
+        const child = spawn(binaryPath, args)
+        let output = ''
+        let error = ''
+
+        child.stdout.on('data', d => output += d)
+        child.stderr.on('data', d => error += d)
+
+        child.on('close', code => {
+             if (code === 0) {
+                 const urls = output.split('\n').map(s => s.trim()).filter(Boolean)
+                 resolve(urls)
+             } else {
+                 reject(new Error(`Failed to expand playlist: ${error}`))
+             }
+        })
+    })
+}
+
 async function processReadAloud(
     youtubeUrl: string,
     tagIds: string[],
@@ -100,6 +134,49 @@ async function processReadAloud(
     if (startTime) startTime = normalizeTime(startTime)
     if (endTime) endTime = normalizeTime(endTime)
 
+    // Check if story already exists
+    const videoIdMatch = youtubeUrl.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)
+    const videoId = videoIdMatch ? videoIdMatch[1] : null
+
+    let existingStory = null
+    if (videoId) {
+        existingStory = await prisma.story.findFirst({
+            where: {
+                OR: [
+                    { originalLink: youtubeUrl },
+                    { originalLink: { contains: videoId } }
+                ]
+            },
+            select: { id: true, title: true, tags: { select: { id: true } } }
+        })
+    } else {
+         existingStory = await prisma.story.findFirst({
+            where: { originalLink: youtubeUrl },
+            select: { id: true, title: true, tags: { select: { id: true } } }
+        })
+    }
+
+    if (existingStory) {
+        console.log(`[processReadAloud] Story already exists: "${existingStory.title}" (${existingStory.id}). Checking tags...`)
+        const existingTagIds = existingStory.tags.map(t => t.id)
+        const tagsToAdd = tagIds.filter(id => !existingTagIds.includes(id))
+
+        if (tagsToAdd.length > 0) {
+             console.log(`[processReadAloud] Adding ${tagsToAdd.length} new tags.`)
+             await prisma.story.update({
+                 where: { id: existingStory.id },
+                 data: {
+                     tags: {
+                         connect: tagsToAdd.map(id => ({ id }))
+                     }
+                 }
+             })
+        } else {
+            console.log(`[processReadAloud] No new tags to add.`)
+        }
+        return
+    }
+
     const storageDir = process.env.STORAGE_DIR || path.join(process.cwd(), 'data', 'uploads', 'audiobooks')
     await fs.promises.mkdir(storageDir, { recursive: true })
 
@@ -108,7 +185,7 @@ async function processReadAloud(
     const outputPath = outputBase + '.mp4'
 
     const binaryPath = await ensureYtDlp()
-    const ytDlpWrap = new YtDlpWrap(binaryPath)
+    // const ytDlpWrap = new YtDlpWrap(binaryPath)
 
     const args = [
         youtubeUrl,
@@ -117,7 +194,10 @@ async function processReadAloud(
         '-o', outputPath,
         '--add-metadata',
         '--write-thumbnail',
-        '--convert-thumbnails', 'jpg'
+        '--convert-thumbnails', 'jpg',
+        '--force-ipv6',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        '--no-playlist'
     ]
 
     const cookiesPath = path.join(process.cwd(), 'data', 'cookies.txt')
@@ -132,7 +212,27 @@ async function processReadAloud(
     }
 
     console.log('Executing yt-dlp with args:', args)
-    await ytDlpWrap.execPromise(args)
+
+    await new Promise<void>((resolve, reject) => {
+        const child = spawn(binaryPath, args, {
+            stdio: 'inherit'
+        })
+
+        child.on('error', (error) => {
+            console.error('[yt-dlp] Error:', error)
+            reject(error)
+        })
+
+        child.on('close', (code) => {
+            if (code === 0) {
+                console.log('[yt-dlp] Finished successfully')
+                resolve()
+            } else {
+                console.error(`[yt-dlp] Process exited with code ${code}`)
+                reject(new Error(`yt-dlp exited with code ${code}`))
+            }
+        })
+    })
 
     // Check for thumbnail
     let coverBlob = null
@@ -260,31 +360,58 @@ export async function action({ request }: ActionFunctionArgs) {
         const globalStartTime = formData.get('startTime') as string
         const globalEndTime = formData.get('endTime') as string
         const title = formData.get('title') as string
+        const downloadPlaylist = formData.get('downloadPlaylist') === 'on'
 
-        try {
-            for (const line of lines) {
-                const parts = line.split(/\s+/)
-                const url = parts[0]
+        // Run in background to avoid timeout
+        ;(async () => {
+            try {
+                for (const line of lines) {
+                    const parts = line.split(/\s+/)
+                    const url = parts[0]
 
-                let start = globalStartTime
-                let end = globalEndTime
+                    let start = globalStartTime
+                    let end = globalEndTime
 
-                // Check for optional start/end times in the line
-                // Format: URL [start] [end]
-                if (parts.length > 1 && /^:?\d/.test(parts[1])) {
-                    start = parts[1]
-                    if (parts.length > 2 && /^:?\d/.test(parts[2])) {
-                        end = parts[2]
+                    // Check for optional start/end times in the line
+                    // Format: URL [start] [end]
+                    if (parts.length > 1 && /^:?\d/.test(parts[1])) {
+                        start = parts[1]
+                        if (parts.length > 2 && /^:?\d/.test(parts[2])) {
+                            end = parts[2]
+                        }
+                    }
+
+                    const hasPlaylist = url.includes('list=') || url.includes('/playlist')
+
+                    if (downloadPlaylist && hasPlaylist) {
+                        try {
+                            console.log('Expanding playlist:', url)
+                            const videoUrls = await expandPlaylist(url)
+                            console.log(`Found ${videoUrls.length} videos in playlist`)
+                            for (let i = 0; i < videoUrls.length; i++) {
+                                const videoUrl = videoUrls[i]
+                                await processReadAloud(videoUrl, tagIds, start, end, title)
+
+                                // Wait 1 minute between downloads to avoid rate limits, unless it's the last one
+                                if (i < videoUrls.length - 1) {
+                                    console.log('Waiting 1 minute before next download to avoid rate limits...')
+                                    await new Promise(resolve => setTimeout(resolve, 60000))
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Failed to expand playlist, trying as single URL:', e)
+                            await processReadAloud(url, tagIds, start, end, title)
+                        }
+                    } else {
+                        await processReadAloud(url, tagIds, start, end, title)
                     }
                 }
-
-                await processReadAloud(url, tagIds, start, end, title)
+            } catch (e: any) {
+                console.error('Background download failed:', e)
             }
-            return redirect(`/admin/stories`)
-        } catch (e: any) {
-            console.error('Download failed:', e)
-            return json({ error: `Download failed: ${e.message}` }, { status: 500 })
-        }
+        })()
+
+        return redirect(`/admin/stories`)
     }
 
     // Audiobook Handling
@@ -468,6 +595,17 @@ export default function NewStory() {
                                     placeholder="https://www.youtube.com/watch?v=..."
                                     className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    type="checkbox"
+                                    id="downloadPlaylist"
+                                    name="downloadPlaylist"
+                                    className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                />
+                                <Label htmlFor="downloadPlaylist" className="font-normal">
+                                    Download full playlist (if URL is a playlist or contains a list ID)
+                                </Label>
                             </div>
                             <div className="flex gap-4">
                                 <div className="flex-1">
