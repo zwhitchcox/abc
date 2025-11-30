@@ -103,7 +103,7 @@ function StatusBadge({ status }: { status: string }) {
 	)
 }
 
-function safeParse(jsonString: string | null) {
+function safeParse(jsonString: string | null): Record<string, any> | null {
 	if (!jsonString) return null
 	try {
 		return JSON.parse(jsonString)
@@ -113,12 +113,12 @@ function safeParse(jsonString: string | null) {
 }
 
 function JobDetails({ job }: { job: any }) {
-    const result = safeParse(job.result)
+    const result = safeParse(job.result) as Record<string, any> | null
 
     if (job.status === 'failed') {
         return <span className="text-red-500 text-xs break-words">{result?.error || 'Unknown error'}</span>
     }
-
+    
     if (job.status === 'completed') {
         return (
             <div className="text-xs space-y-1">

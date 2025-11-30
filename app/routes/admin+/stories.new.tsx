@@ -389,16 +389,17 @@ export async function action({ request }: ActionFunctionArgs) {
                 for (const line of lines) {
                     const parts = line.split(/\s+/)
                     const url = parts[0]
+                    if (!url) continue
 
                     let start = globalStartTime
                     let end = globalEndTime
 
                     // Check for optional start/end times in the line
                     // Format: URL [start] [end]
-                    if (parts.length > 1 && /^:?\d/.test(parts[1])) {
-                        start = parts[1]
-                        if (parts.length > 2 && /^:?\d/.test(parts[2])) {
-                            end = parts[2]
+                    if (parts.length > 1 && /^:?\d/.test(parts[1] ?? '')) {
+                        start = parts[1] as string
+                        if (parts.length > 2 && /^:?\d/.test(parts[2] ?? '')) {
+                            end = parts[2] as string
                         }
                     }
 
@@ -407,7 +408,7 @@ export async function action({ request }: ActionFunctionArgs) {
                     if (downloadPlaylist && hasPlaylist) {
                         try {
                             console.log('Expanding playlist:', url)
-                            await updateJobProgress(job.id, `${processedCount}/${totalVideos}`, { message: 'Expanding playlist...', currentUrl: url })
+                            await updateJobProgress(job.id, `${processedCount}/${totalVideos}`, { message: 'Expanding playlist...', currentUrl: url as string | undefined })
 
                             const videoUrls = await expandPlaylist(url)
                             console.log(`Found ${videoUrls.length} videos in playlist`)
@@ -417,12 +418,13 @@ export async function action({ request }: ActionFunctionArgs) {
 
                             for (let i = 0; i < videoUrls.length; i++) {
                                 const videoUrl = videoUrls[i]
+                                if (typeof videoUrl === 'undefined') continue
                                 const progressPercent = Math.round((processedCount / totalVideos) * 100)
                                 await updateJobProgress(job.id, `${progressPercent}%`, {
                                     message: `Processing video ${i + 1}/${videoUrls.length} from playlist`,
                                     processed: processedCount,
                                     total: totalVideos,
-                                    currentUrl: videoUrl
+                                    currentUrl: videoUrl as string | undefined 
                                 })
 
                                 try {
@@ -467,11 +469,11 @@ export async function action({ request }: ActionFunctionArgs) {
                         }
                     } else {
                         const progressPercent = Math.round((processedCount / totalVideos) * 100)
-                        await updateJobProgress(job.id, `${progressPercent}%`, {
+                        await updateJobProgress(job.id, `${progressPercent}%`, { 
                             message: `Processing video...`,
                             processed: processedCount,
                             total: totalVideos,
-                            currentUrl: url
+                            currentUrl: url as string | undefined
                         })
 
                         try {
