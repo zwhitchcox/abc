@@ -61,7 +61,7 @@ async function findImage(page: any, query: string): Promise<{ buffer: Buffer, co
                 const m = link.getAttribute('m')
                 if (m) {
                     try {
-                        const data = JSON.parse(m)
+                        const data: any = JSON.parse(m)
                         const url = data.murl || data.turl
                         if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
                             return url

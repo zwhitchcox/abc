@@ -29,7 +29,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     await requireUserWithRole(request, 'admin')
     invariantResponse(params.storyId, 'Story ID is required')
 
-    let uploadedImage: { buffer: Buffer, type: string, name: string } | null = null
+    type UploadedImage = { buffer: Buffer, type: string, name: string }
+    let uploadedImage: UploadedImage | null = null
 
     const uploadHandler = async (file: FileUpload) => {
         if (file.fieldName !== 'coverImage') return
@@ -65,14 +66,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
         }
     })
 
-    if (uploadedImage && uploadedImage.buffer.length > 0) {
+    const image = uploadedImage as UploadedImage | null
+
+    if (image && image.buffer.length > 0) {
         const existingImage = await prisma.storyImage.findFirst({ where: { storyId: params.storyId } })
         if (existingImage) {
             await prisma.storyImage.update({
                 where: { id: existingImage.id },
                 data: {
-                    blob: uploadedImage.buffer,
-                    contentType: uploadedImage.type,
+                    blob: image.buffer,
+                    contentType: image.type,
                     altText: title
                 }
             })
@@ -80,8 +83,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
             await prisma.storyImage.create({
                 data: {
                     storyId: params.storyId,
-                    blob: uploadedImage.buffer,
-                    contentType: uploadedImage.type,
+                    blob: image.buffer,
+                    contentType: image.type,
                     altText: title
                 }
             })
