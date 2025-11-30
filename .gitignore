@@ -36,3 +36,4 @@ images*.tar.gz
 /repos
 /data
 /bin
+/cookies.txt

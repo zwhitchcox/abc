@@ -120,6 +120,11 @@ async function processReadAloud(
         '--convert-thumbnails', 'jpg'
     ]
 
+    const cookiesPath = path.join(process.cwd(), 'data', 'cookies.txt')
+    if (fs.existsSync(cookiesPath)) {
+        args.push('--cookies', cookiesPath)
+    }
+
     if (startTime || endTime) {
             const section = `*${startTime || ''}-${endTime || ''}`
             args.push('--download-sections', section)

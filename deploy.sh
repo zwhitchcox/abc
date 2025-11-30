@@ -12,26 +12,28 @@ if [ ! -f .env.production ]; then
     exit 1
 fi
 
-echo "Building..."
-pnpm run build
-
-echo "Deploying to $HOST..."
+echo "Deploying source to $HOST..."
 rsync -avz --delete \
   --exclude 'node_modules' \
   --exclude '.git' \
   --exclude 'data' \
   --exclude '.env*' \
-  --exclude 'tests' \
   --exclude 'ansible' \
   --exclude '.DS_Store' \
+  --exclude 'tests/e2e' \
+  --exclude 'tests/prisma' \
+  --exclude 'build' \
+  --exclude 'public/build' \
+  --exclude 'server-build' \
   ./ "$USER@$HOST:$DIR"
 
 echo "Uploading .env.production..."
 rsync -avz .env.production "$USER@$HOST:$DIR/.env"
 
-echo "Running remote setup..."
+echo "Running remote setup and build..."
 ssh "$USER@$HOST" "cd $DIR && \
-  pnpm install --prod && \
+  pnpm install && \
+  pnpm run build && \
   npx playwright install chromium && \
   echo 'Backing up database...' && \
   (cp data/data.db data/data.db.backup-\$(date +%s) 2>/dev/null || echo 'No database to backup') && \
