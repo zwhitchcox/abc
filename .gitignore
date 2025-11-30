@@ -35,3 +35,4 @@ images*.tar.gz
 
 /repos
 /data
+/bin

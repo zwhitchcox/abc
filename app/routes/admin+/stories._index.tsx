@@ -97,7 +97,13 @@ export default function StoriesAdminRoute() {
 							<div key={story.id} className="grid grid-cols-3 gap-4 p-4 items-center">
 								<div>{story.title}</div>
 								<div>{story._count.chapters}</div>
-								<div className="text-right">
+								<div className="text-right flex justify-end gap-2">
+                                    <Button asChild size="sm" variant="outline">
+                                        <Link to={story.id}>
+                                            <Icon name="pencil-1" className="h-4 w-4" />
+                                            <span className="sr-only">Edit</span>
+                                        </Link>
+                                    </Button>
 									<DeleteStoryButton storyId={story.id} />
 								</div>
 							</div>
@@ -128,7 +134,7 @@ function DeleteStoryButton({ storyId }: { storyId: string }) {
 					}
 				}}
 			>
-				<Icon name="trash" className="mr-2" />
+				<Icon name="trash" className="mr-2 h-4 w-4" />
 				{isDeleting ? 'Deleting...' : 'Delete'}
 			</Button>
 		</fetcher.Form>

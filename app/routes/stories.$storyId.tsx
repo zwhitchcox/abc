@@ -1,5 +1,5 @@
 import { invariantResponse } from '@epic-web/invariant'
-import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/node'
+import { json, redirect, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/node'
 import { Link, useLoaderData, useFetcher, useNavigate } from '@remix-run/react'
 import { useState, useRef, useEffect } from 'react'
 import { Icon } from '#app/components/ui/icon.tsx'
@@ -26,6 +26,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 			id: true,
 			title: true,
             type: true,
+            tags: true,
 			images: {
 				select: {
 					id: true,
@@ -66,6 +67,69 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         parentSettings = await prisma.parentSettings.findUnique({
             where: { userId }
         })
+
+        // Permissive Restriction Check
+        if (!story.tags || story.tags.length === 0) {
+            throw redirect(`/timeout?reason=No Tags Assigned`)
+        }
+
+        const timeZone = parentSettings?.timeZone || 'UTC'
+        const now = new Date()
+        let isAllowed = false
+
+        for (const tag of story.tags) {
+            let tagOpen = true
+
+            // 1. Enabled Check
+            if (!tag.enabled) tagOpen = false
+
+            // 2. Restricted Hours Check
+            if (tagOpen && tag.restrictedHoursStart !== null && tag.restrictedHoursEnd !== null) {
+                try {
+                    const formatter = new Intl.DateTimeFormat('en-US', {
+                        timeZone,
+                        hour: 'numeric',
+                        hour12: false
+                    })
+                    const hour = parseInt(formatter.format(now)) % 24
+
+                    let inRange = false
+                    if (tag.restrictedHoursStart < tag.restrictedHoursEnd) {
+                        inRange = hour >= tag.restrictedHoursStart && hour < tag.restrictedHoursEnd
+                    } else if (tag.restrictedHoursStart > tag.restrictedHoursEnd) {
+                         inRange = hour >= tag.restrictedHoursStart || hour < tag.restrictedHoursEnd
+                    }
+
+                    if (inRange) tagOpen = false
+                } catch (e) {
+                    console.error('Timezone check failed:', e)
+                }
+            }
+
+            // 3. Usage Check
+            if (tagOpen && tag.limitSeconds) {
+                const windowStart = new Date(now.getTime() - tag.intervalSeconds * 1000)
+                // Count usage for this specific tag
+                const logs = await prisma.usageLog.findMany({
+                    where: {
+                        userId,
+                        story: { tags: { some: { id: tag.id } } },
+                        createdAt: { gt: windowStart }
+                    }
+                })
+                const total = logs.reduce((acc, log) => acc + log.secondsPlayed, 0)
+                if (total >= tag.limitSeconds) tagOpen = false
+            }
+
+            if (tagOpen) {
+                isAllowed = true
+                break
+            }
+        }
+
+        if (!isAllowed) {
+            throw redirect(`/timeout?reason=Restricted`)
+        }
     }
 
 	return json({ story, progress, parentSettings })
@@ -78,7 +142,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const formData = await request.formData()
     const currentChapterIndex = Number(formData.get('currentChapterIndex'))
     const currentTime = Number(formData.get('currentTime'))
+    const increment = Number(formData.get('increment') || 0)
 
+    // Save Playback Progress
     await prisma.storyProgress.upsert({
         where: {
             userId_storyId: { userId, storyId: params.storyId }
@@ -94,6 +160,77 @@ export async function action({ request, params }: ActionFunctionArgs) {
             currentTime,
         }
     })
+
+    // Record Usage and Check Permissive Limits
+    if (increment > 0) {
+        await prisma.usageLog.create({
+            data: {
+                userId,
+                storyId: params.storyId,
+                secondsPlayed: increment
+            }
+        })
+
+        // Check if ANY tag is still valid
+        const story = await prisma.story.findUnique({
+            where: { id: params.storyId },
+            include: { tags: true }
+        })
+
+        const parentSettings = await prisma.parentSettings.findUnique({ where: { userId } })
+        const timeZone = parentSettings?.timeZone || 'UTC'
+        const now = new Date()
+
+        if (!story?.tags || story.tags.length === 0) {
+             return json({ success: true, limitReached: true, reason: 'No Tags' })
+        }
+
+        let isAllowed = false
+
+        for (const tag of story.tags) {
+            let tagOpen = true
+
+            if (!tag.enabled) tagOpen = false
+
+            if (tagOpen && tag.restrictedHoursStart !== null && tag.restrictedHoursEnd !== null) {
+                 try {
+                    const formatter = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: false })
+                    const hour = parseInt(formatter.format(now)) % 24
+                    let inRange = false
+                    if (tag.restrictedHoursStart < tag.restrictedHoursEnd) {
+                        inRange = hour >= tag.restrictedHoursStart && hour < tag.restrictedHoursEnd
+                    } else if (tag.restrictedHoursStart > tag.restrictedHoursEnd) {
+                         inRange = hour >= tag.restrictedHoursStart || hour < tag.restrictedHoursEnd
+                    }
+                    if (inRange) tagOpen = false
+                } catch {
+                    // ignore error
+                }
+            }
+
+            if (tagOpen && tag.limitSeconds) {
+                const windowStart = new Date(now.getTime() - tag.intervalSeconds * 1000)
+                const logs = await prisma.usageLog.findMany({
+                    where: {
+                        userId,
+                        story: { tags: { some: { id: tag.id } } },
+                        createdAt: { gt: windowStart }
+                    }
+                })
+                const total = logs.reduce((acc, log) => acc + log.secondsPlayed, 0)
+                if (total >= tag.limitSeconds) tagOpen = false
+            }
+
+            if (tagOpen) {
+                isAllowed = true
+                break
+            }
+        }
+
+        if (!isAllowed) {
+            return json({ success: true, limitReached: true, reason: 'Limit Reached' })
+        }
+    }
 
     return json({ success: true })
 }
@@ -126,6 +263,7 @@ export default function StoryPlayer() {
 
     // Track previous chapter index to detect actual changes
     const prevChapterIndexRef = useRef(progress?.currentChapterIndex ?? 0)
+    const lastSaveTimeRef = useRef(Date.now())
 
 	const currentChapter = story.chapters[currentChapterIndex]
 	const hasNextChapter = currentChapterIndex < story.chapters.length - 1
@@ -152,11 +290,20 @@ export default function StoryPlayer() {
         setTimeout(() => setTitleTapCount(0), 2000)
     }
 
+    // Handle limit reached
+    useEffect(() => {
+        if (fetcher.data && 'limitReached' in (fetcher.data as any) && (fetcher.data as any).limitReached) {
+            const reason = (fetcher.data as any).reason
+            navigate(`/timeout?reason=${encodeURIComponent(reason || 'Limit Reached')}`)
+        }
+    }, [fetcher.data, navigate])
+
 	// Effect to handle play/pause
 	useEffect(() => {
 		if (mediaRef.current) {
 			if (isPlaying) {
 				mediaRef.current.play().catch(console.error)
+                lastSaveTimeRef.current = Date.now() // Reset time tracking on play
 			} else {
 				mediaRef.current.pause()
 			}
@@ -195,9 +342,20 @@ export default function StoryPlayer() {
     const saveProgress = () => {
         if (mediaRef.current && story.id) {
             const time = mediaRef.current.currentTime
+
+            let increment = 0
+            if (isPlaying) {
+                const now = Date.now()
+                increment = Math.round((now - lastSaveTimeRef.current) / 1000)
+                if (increment > 60) increment = 10 // Safety cap
+                if (increment < 0) increment = 0
+                lastSaveTimeRef.current = now
+            }
+
             fetcher.submit({
                 currentChapterIndex: String(currentChapterIndex),
-                currentTime: String(time)
+                currentTime: String(time),
+                increment: String(increment)
             }, { method: 'post' })
         }
     }

@@ -10,9 +10,10 @@ import { type FileUpload, parseFormData } from '@mjackson/form-data-parser'
 import {
 	json,
 	redirect,
+    type LoaderFunctionArgs,
 	type ActionFunctionArgs,
 } from '@remix-run/node'
-import { Form, useActionData } from '@remix-run/react'
+import { Form, useActionData, useLoaderData } from '@remix-run/react'
 import ffprobeStatic from 'ffprobe-static'
 import { useState } from 'react'
 import YtDlpWrap from 'yt-dlp-wrap'
@@ -88,6 +89,12 @@ async function ensureYtDlp() {
     }
 }
 
+export async function loader({ request }: LoaderFunctionArgs) {
+    await requireUserWithRole(request, 'admin')
+    const tags = await prisma.tag.findMany({ orderBy: { name: 'asc' } })
+    return json({ tags })
+}
+
 export async function action({ request }: ActionFunctionArgs) {
 	await requireUserWithRole(request, 'admin')
 
@@ -124,6 +131,7 @@ export async function action({ request }: ActionFunctionArgs) {
 	)
 
     const storyType = formData.get('storyType')
+    const tagIds = formData.getAll('tagIds') as string[]
 
     if (storyType === 'readaloud') {
         const youtubeUrl = formData.get('youtubeUrl')
@@ -203,6 +211,7 @@ export async function action({ request }: ActionFunctionArgs) {
                     title,
                     type: 'readaloud',
                     originalLink: youtubeUrl as string,
+                    tags: tagIds.length > 0 ? { connect: tagIds.map(id => ({ id })) } : undefined,
                     images: coverBlob ? {
                         create: {
                             contentType: coverContentType,
@@ -259,6 +268,7 @@ export async function action({ request }: ActionFunctionArgs) {
 		data: {
 			title,
             type: 'audiobook',
+            tags: tagIds.length > 0 ? { connect: tagIds.map(id => ({ id })) } : undefined,
 			images: coverPicture ? {
 				create: {
 					contentType: coverPicture.format,
@@ -316,6 +326,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function NewStory() {
 	const actionData = useActionData<typeof action>()
+    const { tags } = useLoaderData<typeof loader>()
 	const isPending = useIsPending()
     const [storyType, setStoryType] = useState<'audiobook' | 'readaloud'>('audiobook')
 
@@ -334,31 +345,51 @@ export default function NewStory() {
 					{...getFormProps(form)}
 					encType="multipart/form-data"
 				>
-                    <div>
-                        <Label>Story Type</Label>
-                        <div className="flex gap-4 mt-2">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="storyType"
-                                    value="audiobook"
-                                    checked={storyType === 'audiobook'}
-                                    onChange={() => setStoryType('audiobook')}
-                                    className="w-4 h-4 text-orange-600"
-                                />
-                                Audiobook (M4B/MP3)
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="storyType"
-                                    value="readaloud"
-                                    checked={storyType === 'readaloud'}
-                                    onChange={() => setStoryType('readaloud')}
-                                    className="w-4 h-4 text-orange-600"
-                                />
-                                Read Aloud (YouTube)
-                            </label>
+                    <div className="grid grid-cols-1 gap-6">
+                        <div>
+                            <Label>Story Type</Label>
+                            <div className="flex gap-4 mt-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="storyType"
+                                        value="audiobook"
+                                        checked={storyType === 'audiobook'}
+                                        onChange={() => setStoryType('audiobook')}
+                                        className="w-4 h-4 text-orange-600"
+                                    />
+                                    Audiobook (M4B/MP3)
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="storyType"
+                                        value="readaloud"
+                                        checked={storyType === 'readaloud'}
+                                        onChange={() => setStoryType('readaloud')}
+                                        className="w-4 h-4 text-orange-600"
+                                    />
+                                    Read Aloud (YouTube)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <Label htmlFor="tags">Tags / Collections</Label>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-2 border p-4 rounded-lg bg-slate-50 dark:bg-slate-900 max-h-48 overflow-y-auto">
+                                {tags.length === 0 && <p className="text-sm text-muted-foreground col-span-full">No tags available. Create some in Admin.</p>}
+                                {tags.map((tag) => (
+                                    <label key={tag.id} className="flex items-center space-x-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            name="tagIds"
+                                            value={tag.id}
+                                            className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                        />
+                                        <span className="text-sm">{tag.name}</span>
+                                    </label>
+                                ))}
+                            </div>
                         </div>
                     </div>
 

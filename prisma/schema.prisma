@@ -26,6 +26,7 @@ model User {
   sessions       Session[]
   connections    Connection[]
   storyProgress  StoryProgress[]
+  usageLogs      UsageLog[]
   parentSettings ParentSettings?
 }
 
@@ -39,6 +40,7 @@ model ParentSettings {
 
   maxChaptersToPlay Int     @default(1)
   showFullControls  Boolean @default(false)
+  timeZone          String  @default("UTC")
 }
 
 model Note {
@@ -190,10 +192,43 @@ model Story {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  images   StoryImage[]
-  chapters Chapter[]
-  audio    AudioFile?
-  progress StoryProgress[]
+  images    StoryImage[]
+  chapters  Chapter[]
+  audio     AudioFile?
+  progress  StoryProgress[]
+  usageLogs UsageLog[]
+  tags      Tag[]
+}
+
+model Tag {
+  id   String @id @default(cuid())
+  name String
+
+  limitSeconds    Int?
+  intervalSeconds Int  @default(86400)
+
+  enabled              Boolean @default(true)
+  restrictedHoursStart Int?
+  restrictedHoursEnd   Int?
+
+  stories Story[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UsageLog {
+  id            String   @id @default(cuid())
+  secondsPlayed Int
+  createdAt     DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  story   Story  @relation(fields: [storyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  storyId String
+
+  @@index([userId, storyId, createdAt])
 }
 
 model StoryImage {
