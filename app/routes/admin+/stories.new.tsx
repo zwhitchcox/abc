@@ -90,6 +90,107 @@ async function ensureYtDlp() {
     }
 }
 
+async function processReadAloud(
+    youtubeUrl: string,
+    tagIds: string[],
+    startTime: string | undefined,
+    endTime: string | undefined,
+    title: string | undefined
+) {
+    if (startTime) startTime = normalizeTime(startTime)
+    if (endTime) endTime = normalizeTime(endTime)
+
+    const storageDir = process.env.STORAGE_DIR || path.join(process.cwd(), 'data', 'uploads', 'audiobooks')
+    await fs.promises.mkdir(storageDir, { recursive: true })
+
+    const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(7)}`
+    const outputBase = path.join(storageDir, uniqueFilename)
+    const outputPath = outputBase + '.mp4'
+
+    const binaryPath = await ensureYtDlp()
+    const ytDlpWrap = new YtDlpWrap(binaryPath)
+
+    const args = [
+        youtubeUrl,
+        '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        '--merge-output-format', 'mp4',
+        '-o', outputPath,
+        '--add-metadata',
+        '--write-thumbnail',
+        '--convert-thumbnails', 'jpg'
+    ]
+
+    if (startTime || endTime) {
+            const section = `*${startTime || ''}-${endTime || ''}`
+            args.push('--download-sections', section)
+            args.push('--force-keyframes-at-cuts')
+    }
+
+    console.log('Executing yt-dlp with args:', args)
+    await ytDlpWrap.execPromise(args)
+
+    // Check for thumbnail
+    let coverBlob = null
+    let coverContentType = 'image/jpeg'
+    const potentialExts = ['.jpg', '.jpeg', '.webp', '.png']
+
+    for (const ext of potentialExts) {
+            const thumbPath = outputBase + ext
+            if (fs.existsSync(thumbPath)) {
+                coverBlob = await fs.promises.readFile(thumbPath)
+                coverContentType = ext === '.webp' ? 'image/webp' : (ext === '.png' ? 'image/png' : 'image/jpeg')
+                // Clean up thumb file
+                await fs.promises.unlink(thumbPath)
+                break
+            }
+    }
+
+    // Probe for metadata (duration, title)
+    let duration = 0
+    let finalTitle = title
+
+    try {
+        const info = await probe(outputPath)
+        duration = info.format?.duration || 0
+        if (!finalTitle && info.format?.tags?.title) finalTitle = info.format.tags.title
+    } catch (e) {
+        console.error('Probing downloaded file failed:', e)
+    }
+
+    if (!finalTitle) finalTitle = 'Downloaded Video'
+
+    // Create DB entry
+    await prisma.story.create({
+        data: {
+            title: finalTitle,
+            type: 'readaloud',
+            originalLink: youtubeUrl,
+            tags: tagIds.length > 0 ? { connect: tagIds.map(id => ({ id })) } : undefined,
+            images: coverBlob ? {
+                create: {
+                    contentType: coverContentType,
+                    blob: coverBlob,
+                    altText: finalTitle,
+                }
+            } : undefined,
+            audio: {
+                create: {
+                    contentType: 'video/mp4',
+                    filepath: outputPath,
+                }
+            },
+            chapters: {
+                create: {
+                    title: 'Full Video',
+                    order: 0,
+                    startTime: 0,
+                    endTime: parseFloat(String(duration)),
+                }
+            }
+        }
+    })
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
     await requireUserWithRole(request, 'admin')
     const tags = await prisma.tag.findMany({ orderBy: { name: 'asc' } })
@@ -133,112 +234,48 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const storyType = formData.get('storyType')
     const tagIds = formData.getAll('tagIds') as string[]
+    const newTagName = formData.get('newTagName') as string
+
+    if (newTagName) {
+        const tag = await prisma.tag.create({ data: { name: newTagName } })
+        tagIds.push(tag.id)
+    }
 
     if (storyType === 'readaloud') {
-        const youtubeUrl = formData.get('youtubeUrl')
-        if (typeof youtubeUrl !== 'string' || !youtubeUrl) {
+        const youtubeUrlsStr = formData.get('youtubeUrl')
+        if (typeof youtubeUrlsStr !== 'string' || !youtubeUrlsStr) {
              return json({ error: 'YouTube URL is required' }, { status: 400 })
         }
 
-        let startTime = formData.get('startTime') as string
-        let endTime = formData.get('endTime') as string
+        const lines = youtubeUrlsStr.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)
+        if (lines.length === 0) {
+             return json({ error: 'No valid YouTube URLs provided' }, { status: 400 })
+        }
 
-        if (startTime) startTime = normalizeTime(startTime)
-        if (endTime) endTime = normalizeTime(endTime)
-
-        const storageDir = process.env.STORAGE_DIR || path.join(process.cwd(), 'data', 'uploads', 'audiobooks')
-        await fs.promises.mkdir(storageDir, { recursive: true })
-
-        const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(7)}`
-        const outputBase = path.join(storageDir, uniqueFilename)
-        const outputPath = outputBase + '.mp4'
+        const globalStartTime = formData.get('startTime') as string
+        const globalEndTime = formData.get('endTime') as string
+        const title = formData.get('title') as string
 
         try {
-            const binaryPath = await ensureYtDlp()
-            const ytDlpWrap = new YtDlpWrap(binaryPath)
+            for (const line of lines) {
+                const parts = line.split(/\s+/)
+                const url = parts[0]
 
-            const args = [
-                youtubeUrl,
-                '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                '--merge-output-format', 'mp4',
-                '-o', outputPath,
-                '--add-metadata',
-                '--write-thumbnail',
-                '--convert-thumbnails', 'jpg'
-            ]
+                let start = globalStartTime
+                let end = globalEndTime
 
-            if (startTime || endTime) {
-                 const section = `*${startTime || ''}-${endTime || ''}`
-                 args.push('--download-sections', section)
-                 args.push('--force-keyframes-at-cuts')
-            }
-
-            console.log('Executing yt-dlp with args:', args)
-            await ytDlpWrap.execPromise(args)
-
-            // Check for thumbnail
-            let coverBlob = null
-            let coverContentType = 'image/jpeg'
-            const potentialExts = ['.jpg', '.jpeg', '.webp', '.png']
-
-            for (const ext of potentialExts) {
-                 const thumbPath = outputBase + ext
-                 if (fs.existsSync(thumbPath)) {
-                     coverBlob = await fs.promises.readFile(thumbPath)
-                     coverContentType = ext === '.webp' ? 'image/webp' : (ext === '.png' ? 'image/png' : 'image/jpeg')
-                     // Clean up thumb file
-                     await fs.promises.unlink(thumbPath)
-                     break
-                 }
-            }
-
-            // Probe for metadata (duration, title)
-            let duration = 0
-            let title = formData.get('title') as string
-
-            try {
-                const info = await probe(outputPath)
-                duration = info.format?.duration || 0
-                if (!title && info.format?.tags?.title) title = info.format.tags.title
-            } catch (e) {
-                console.error('Probing downloaded file failed:', e)
-            }
-
-            if (!title) title = 'Downloaded Video'
-
-            // Create DB entry
-            await prisma.story.create({
-                data: {
-                    title,
-                    type: 'readaloud',
-                    originalLink: youtubeUrl as string,
-                    tags: tagIds.length > 0 ? { connect: tagIds.map(id => ({ id })) } : undefined,
-                    images: coverBlob ? {
-                        create: {
-                            contentType: coverContentType,
-                            blob: coverBlob,
-                            altText: title,
-                        }
-                    } : undefined,
-                    audio: {
-                        create: {
-                            contentType: 'video/mp4',
-                            filepath: outputPath,
-                        }
-                    },
-                    chapters: {
-                        create: {
-                            title: 'Full Video',
-                            order: 0,
-                            startTime: 0,
-                            endTime: parseFloat(String(duration)),
-                        }
+                // Check for optional start/end times in the line
+                // Format: URL [start] [end]
+                if (parts.length > 1 && /^:?\d/.test(parts[1])) {
+                    start = parts[1]
+                    if (parts.length > 2 && /^:?\d/.test(parts[2])) {
+                        end = parts[2]
                     }
                 }
-            })
 
+                await processReadAloud(url, tagIds, start, end, title)
+            }
             return redirect(`/admin/stories`)
-
         } catch (e: any) {
             console.error('Download failed:', e)
             return json({ error: `Download failed: ${e.message}` }, { status: 500 })
@@ -377,6 +414,14 @@ export default function NewStory() {
 
                         <div>
                             <Label htmlFor="tags">Tags / Collections</Label>
+                            <div className="flex gap-2 mt-2 mb-2">
+                                <input
+                                    type="text"
+                                    name="newTagName"
+                                    placeholder="Create New Tag..."
+                                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                />
+                            </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-2 border p-4 rounded-lg bg-slate-50 dark:bg-slate-900 max-h-48 overflow-y-auto">
                                 {tags.length === 0 && <p className="text-sm text-muted-foreground col-span-full">No tags available. Create some in Admin.</p>}
                                 {tags.map((tag) => (
@@ -410,14 +455,13 @@ export default function NewStory() {
                     ) : (
                         <>
                             <div>
-                                <Label htmlFor="youtubeUrl">YouTube URL</Label>
-                                <input
+                                <Label htmlFor="youtubeUrl">YouTube URLs (One per line, optional format: URL [start] [end])</Label>
+                                <textarea
                                     id="youtubeUrl"
                                     name="youtubeUrl"
-                                    type="url"
                                     required
                                     placeholder="https://www.youtube.com/watch?v=..."
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                             </div>
                             <div className="flex gap-4">

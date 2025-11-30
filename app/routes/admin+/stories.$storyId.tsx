@@ -128,7 +128,12 @@ export default function EditStory() {
 
     return (
         <div className="container mx-auto p-6 max-w-2xl">
-            <h1 className="text-3xl font-bold mb-8">Edit Story</h1>
+            <div className="flex items-center gap-4 mb-8">
+                <Link to="/admin/stories" className="text-muted-foreground hover:text-foreground">
+                    <Icon name="arrow-left" className="h-6 w-6" />
+                </Link>
+                <h1 className="text-3xl font-bold">Edit Story</h1>
+            </div>
 
             {actionData && 'message' in actionData && (
                 <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 rounded-lg border border-blue-200 dark:border-blue-800 flex items-center gap-2">
