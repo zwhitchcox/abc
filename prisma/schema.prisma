@@ -27,6 +27,7 @@ model User {
   connections    Connection[]
   storyProgress  StoryProgress[]
   usageLogs      UsageLog[]
+  jobs           Job[]
   parentSettings ParentSettings?
 }
 
@@ -309,4 +310,19 @@ model StoryProgress {
   @@unique([userId, storyId])
   @@index([userId])
   @@index([storyId])
+}
+
+model Job {
+  id       String  @id @default(cuid())
+  type     String // e.g. "import:youtube", "split:m4b"
+  status   String // e.g. "pending", "processing", "completed", "failed"
+  progress String? // e.g. "50%", "Downloading video 1/10"
+  details  String? // JSON string with input details (e.g. URL, tags)
+  result   String? // JSON string with output details (e.g. errors, new story IDs)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  userId String?
 }

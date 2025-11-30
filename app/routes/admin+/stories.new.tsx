@@ -17,14 +17,17 @@ import { Form, useActionData, useLoaderData } from '@remix-run/react'
 import ffprobeStatic from 'ffprobe-static'
 import { useState } from 'react'
 import YtDlpWrapImport from 'yt-dlp-wrap'
-const YtDlpWrap = (YtDlpWrapImport as any).default ?? YtDlpWrapImport
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { Button } from '#app/components/ui/button.tsx'
 import { Label } from '#app/components/ui/label.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
+import { getUserId } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
+import { createJob, updateJobProgress, completeJob, failJob } from '#app/utils/jobs.server.ts'
 import { useIsPending } from '#app/utils/misc.tsx'
 import { requireUserWithRole } from '#app/utils/permissions.server.ts'
+
+const YtDlpWrap = (YtDlpWrapImport as any).default ?? YtDlpWrapImport
 
 const MAX_FILE_SIZE = 1024 * 1024 * 1024 * 2 // 2GB
 
@@ -130,7 +133,7 @@ async function processReadAloud(
     startTime: string | undefined,
     endTime: string | undefined,
     title: string | undefined
-) {
+): Promise<boolean> {
     if (startTime) startTime = normalizeTime(startTime)
     if (endTime) endTime = normalizeTime(endTime)
 
@@ -174,7 +177,7 @@ async function processReadAloud(
         } else {
             console.log(`[processReadAloud] No new tags to add.`)
         }
-        return
+        return false
     }
 
     const storageDir = process.env.STORAGE_DIR || path.join(process.cwd(), 'data', 'uploads', 'audiobooks')
@@ -294,6 +297,7 @@ async function processReadAloud(
             }
         }
     })
+    return true
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -362,8 +366,23 @@ export async function action({ request }: ActionFunctionArgs) {
         const title = formData.get('title') as string
         const downloadPlaylist = formData.get('downloadPlaylist') === 'on'
 
+        const userId = await getUserId(request)
+        const job = await createJob('import:youtube', userId, {
+            urls: lines,
+            startTime: globalStartTime,
+            endTime: globalEndTime,
+            downloadPlaylist
+        })
+
         // Run in background to avoid timeout
-        ;(async () => {
+        void (async () => {
+            let totalVideos = lines.length
+            let processedCount = 0
+            let succeeded = 0
+            let failed = 0
+            let skipped = 0
+            const results: any[] = []
+
             try {
                 for (const line of lines) {
                     const parts = line.split(/\s+/)
@@ -386,32 +405,92 @@ export async function action({ request }: ActionFunctionArgs) {
                     if (downloadPlaylist && hasPlaylist) {
                         try {
                             console.log('Expanding playlist:', url)
+                            await updateJobProgress(job.id, `${processedCount}/${totalVideos}`, { message: 'Expanding playlist...', currentUrl: url })
+
                             const videoUrls = await expandPlaylist(url)
                             console.log(`Found ${videoUrls.length} videos in playlist`)
+
+                            // Adjust total count: remove the playlist entry, add the videos
+                            totalVideos = totalVideos - 1 + videoUrls.length
+
                             for (let i = 0; i < videoUrls.length; i++) {
                                 const videoUrl = videoUrls[i]
-                                await processReadAloud(videoUrl, tagIds, start, end, title)
+                                const progressPercent = Math.round((processedCount / totalVideos) * 100)
+                                await updateJobProgress(job.id, `${progressPercent}%`, {
+                                    message: `Processing video ${i + 1}/${videoUrls.length} from playlist`,
+                                    processed: processedCount,
+                                    total: totalVideos,
+                                    currentUrl: videoUrl
+                                })
 
-                                // Wait 1 minute between downloads to avoid rate limits, unless it's the last one
-                                if (i < videoUrls.length - 1) {
-                                    console.log('Waiting 1 minute before next download to avoid rate limits...')
-                                    await new Promise(resolve => setTimeout(resolve, 60000))
+                                try {
+                                    const downloaded = await processReadAloud(videoUrl, tagIds, start, end, title)
+                                    if (downloaded) succeeded++
+                                    else skipped++
+                                    results.push({ url: videoUrl, status: downloaded ? 'downloaded' : 'skipped' })
+
+                                    // Wait 1 minute between downloads to avoid rate limits, unless it's the last one
+                                    if (downloaded && i < videoUrls.length - 1) {
+                                        console.log('Waiting 1 minute before next download to avoid rate limits...')
+                                        await updateJobProgress(job.id, `${progressPercent}%`, {
+                                            message: `Waiting 1m before next video...`,
+                                            processed: processedCount + 1,
+                                            total: totalVideos
+                                        })
+                                        await new Promise(resolve => setTimeout(resolve, 60000))
+                                    }
+                                } catch (e) {
+                                    console.error(`Failed to download video ${videoUrl}:`, e)
+                                    failed++
+                                    results.push({ url: videoUrl, status: 'failed', error: String(e) })
+                                    // Continue to next video
                                 }
+                                processedCount++
                             }
                         } catch (e) {
                             console.error('Failed to expand playlist, trying as single URL:', e)
-                            await processReadAloud(url, tagIds, start, end, title)
+                             await updateJobProgress(job.id, `${Math.round((processedCount / totalVideos) * 100)}%`, { message: 'Playlist expansion failed, trying single URL...' })
+
+                            try {
+                                const downloaded = await processReadAloud(url, tagIds, start, end, title)
+                                if (downloaded) succeeded++
+                                else skipped++
+                                results.push({ url, status: downloaded ? 'downloaded' : 'skipped' })
+                            } catch (singleError) {
+                                failed++
+                                results.push({ url, status: 'failed', error: String(singleError) })
+                            }
+                            processedCount++
                         }
                     } else {
-                        await processReadAloud(url, tagIds, start, end, title)
+                        const progressPercent = Math.round((processedCount / totalVideos) * 100)
+                        await updateJobProgress(job.id, `${progressPercent}%`, {
+                            message: `Processing video...`,
+                            processed: processedCount,
+                            total: totalVideos,
+                            currentUrl: url
+                        })
+
+                        try {
+                            const downloaded = await processReadAloud(url, tagIds, start, end, title)
+                             if (downloaded) succeeded++
+                            else skipped++
+                            results.push({ url, status: downloaded ? 'downloaded' : 'skipped' })
+                        } catch (e) {
+                            failed++
+                            results.push({ url, status: 'failed', error: String(e) })
+                        }
+                        processedCount++
                     }
                 }
+                await completeJob(job.id, { succeeded, failed, skipped, details: results })
             } catch (e: any) {
                 console.error('Background download failed:', e)
+                await failJob(job.id, e)
             }
         })()
 
-        return redirect(`/admin/stories`)
+        return redirect(`/admin/jobs`)
     }
 
     // Audiobook Handling

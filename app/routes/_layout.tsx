@@ -29,7 +29,7 @@ export function RootLayout({ children }: { children: React.ReactNode }) {
 	const searchBar = isOnSearchPage ? null : <SearchBar status="idle" />
 	return (
 		<div className="flex-1">
-			<div className="flex h-screen flex-col justify-between">
+			<div className="flex min-h-screen flex-col justify-between">
 				<header className="container py-6">
 					<nav className="flex flex-wrap items-center justify-between gap-4 sm:flex-nowrap md:gap-8">
 						<Logo />

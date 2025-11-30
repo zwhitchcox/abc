@@ -37,7 +37,7 @@ ssh "$USER@$HOST" "cd $DIR && \
   npx playwright install chromium && \
   echo 'Backing up database...' && \
   (cp data/data.db data/data.db.backup-\$(date +%s) 2>/dev/null || echo 'No database to backup') && \
-  npx prisma migrate deploy && \
+  npx prisma db push && \
   npx prisma generate && \
   pm2 restart zephyr || pm2 start index.js --name zephyr --time"
 
