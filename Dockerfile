@@ -18,6 +18,10 @@ ENV COMMIT_SHA=$COMMIT_SHA
 ENV PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK = "1"
 ADD package.json pnpm-lock.yaml .npmrc ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+
+# Install Playwright browsers and dependencies
+RUN npx playwright install --with-deps chromium
+
 ADD . .
 
 ENV NODE_ENV="production"
