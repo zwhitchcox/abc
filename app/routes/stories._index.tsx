@@ -28,6 +28,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const tagStatus: Record<string, { restricted: boolean, availableAt: string | null, reason?: string }> = {}
     let globalRestriction: string | null = null
+    const typeStatus: Record<string, { restricted: boolean, reason?: string }> = {
+        audiobook: { restricted: false },
+        readaloud: { restricted: false }
+    }
 
     if (userId) {
         const now = new Date()
@@ -46,6 +50,55 @@ export async function loader({ request }: LoaderFunctionArgs) {
              if (globalTotal >= parentSettings.globalLimitSeconds) {
                   globalRestriction = 'Global Time Limit Reached'
              }
+        }
+
+        // Check Type Limits
+        if (parentSettings) {
+            // Audiobook
+            if (parentSettings.audiobookRestrictedStart !== null && parentSettings.audiobookRestrictedEnd !== null) {
+                 try {
+                    const formatter = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: false })
+                    const hour = parseInt(formatter.format(now)) % 24
+                    let inRange = false
+                    if (parentSettings.audiobookRestrictedStart < parentSettings.audiobookRestrictedEnd) {
+                        inRange = hour >= parentSettings.audiobookRestrictedStart && hour < parentSettings.audiobookRestrictedEnd
+                    } else if (parentSettings.audiobookRestrictedStart > parentSettings.audiobookRestrictedEnd) {
+                         inRange = hour >= parentSettings.audiobookRestrictedStart || hour < parentSettings.audiobookRestrictedEnd
+                    }
+                    if (inRange) typeStatus.audiobook = { restricted: true, reason: 'Restricted Hours' }
+                 } catch {}
+            }
+            if (!typeStatus.audiobook?.restricted && parentSettings.audiobookLimitSeconds) {
+                 const windowStart = new Date(now.getTime() - parentSettings.audiobookIntervalSeconds * 1000)
+                 const logs = await prisma.usageLog.findMany({
+                     where: { userId, story: { type: 'audiobook' }, createdAt: { gt: windowStart } }
+                 })
+                 const total = logs.reduce((acc, log) => acc + log.secondsPlayed, 0)
+                 if (total >= parentSettings.audiobookLimitSeconds) typeStatus.audiobook = { restricted: true, reason: 'Limit Reached' }
+            }
+
+            // Readaloud
+            if (parentSettings.readaloudRestrictedStart !== null && parentSettings.readaloudRestrictedEnd !== null) {
+                 try {
+                    const formatter = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: false })
+                    const hour = parseInt(formatter.format(now)) % 24
+                    let inRange = false
+                    if (parentSettings.readaloudRestrictedStart < parentSettings.readaloudRestrictedEnd) {
+                        inRange = hour >= parentSettings.readaloudRestrictedStart && hour < parentSettings.readaloudRestrictedEnd
+                    } else if (parentSettings.readaloudRestrictedStart > parentSettings.readaloudRestrictedEnd) {
+                         inRange = hour >= parentSettings.readaloudRestrictedStart || hour < parentSettings.readaloudRestrictedEnd
+                    }
+                    if (inRange) typeStatus.readaloud = { restricted: true, reason: 'Restricted Hours' }
+                 } catch {}
+            }
+            if (!typeStatus.readaloud?.restricted && parentSettings.readaloudLimitSeconds) {
+                 const windowStart = new Date(now.getTime() - parentSettings.readaloudIntervalSeconds * 1000)
+                 const logs = await prisma.usageLog.findMany({
+                     where: { userId, story: { type: 'readaloud' }, createdAt: { gt: windowStart } }
+                 })
+                 const total = logs.reduce((acc, log) => acc + log.secondsPlayed, 0)
+                 if (total >= parentSettings.readaloudLimitSeconds) typeStatus.readaloud = { restricted: true, reason: 'Limit Reached' }
+            }
         }
 
         for (const tag of tags) {
@@ -110,7 +163,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }
     }
 
-    return json({ tags, tagStatus, globalRestriction })
+    return json({ tags, tagStatus, globalRestriction, typeStatus })
 }
 
 function CountdownOverlay({ availableAt, reason }: { availableAt: string | null, reason?: string }) {
@@ -159,7 +212,11 @@ function CountdownOverlay({ availableAt, reason }: { availableAt: string | null,
     )
 }
 
-function StoryCard({ story, tagStatus }: { story: any, tagStatus: Record<string, { restricted: boolean, availableAt: string | null, reason?: string }> }) {
+function StoryCard({ story, tagStatus, typeStatus }: {
+    story: any,
+    tagStatus: Record<string, { restricted: boolean, availableAt: string | null, reason?: string }>,
+    typeStatus: Record<string, { restricted: boolean, reason?: string }>
+}) {
     let isRestricted = true
     let restrictionReason = 'No Tags'
     let restrictionAvailableAt: string | null = null
@@ -199,6 +256,15 @@ function StoryCard({ story, tagStatus }: { story: any, tagStatus: Record<string,
         } else {
             isRestricted = false
             restrictionReason = ''
+        }
+    }
+
+    // Check Type Restrictions (Overlay on top of tags)
+    if (!isRestricted) {
+        const typeS = typeStatus[story.type as string]
+        if (typeS?.restricted) {
+            isRestricted = true
+            restrictionReason = typeS.reason || 'Restricted'
         }
     }
 
@@ -250,7 +316,7 @@ function StoryCard({ story, tagStatus }: { story: any, tagStatus: Record<string,
 }
 
 export default function StoriesIndex() {
-    const { tags, tagStatus, globalRestriction } = useLoaderData<typeof loader>()
+    const { tags, tagStatus, globalRestriction, typeStatus } = useLoaderData<typeof loader>()
 
     if (globalRestriction) {
         return (
@@ -298,6 +364,7 @@ export default function StoriesIndex() {
                                         key={story.id}
                                         story={story}
                                         tagStatus={tagStatus}
+                                        typeStatus={typeStatus}
                                     />
                                 ))}
                             </div>

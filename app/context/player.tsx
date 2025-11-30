@@ -57,8 +57,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         stateRef.current = { currentStory, currentTime, currentChapterIndex, isPlaying }
     }, [currentStory, currentTime, currentChapterIndex, isPlaying])
 
-    const saveProgress = useCallback((type: 'fetcher' | 'beacon' = 'fetcher') => {
-        const { currentStory, currentTime, currentChapterIndex } = stateRef.current
+    const saveProgress = useCallback((type: 'fetcher' | 'beacon' = 'fetcher', isPlayingOverride?: boolean) => {
+        const { currentStory, currentTime, currentChapterIndex, isPlaying } = stateRef.current
         if (!currentStory) return
 
         const now = Date.now()
@@ -67,6 +67,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         let time = audioRef.current?.currentTime || currentTime
         if (isNaN(time)) time = 0
 
+        const status = isPlayingOverride ?? isPlaying
+
         if (type === 'beacon') {
             const data = new URLSearchParams()
             data.append('intent', 'track-usage')
@@ -74,6 +76,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             data.append('currentTime', String(time))
             data.append('currentChapterIndex', String(currentChapterIndex))
             data.append('increment', String(increment))
+            data.append('isPlaying', String(status))
             navigator.sendBeacon('/resources/player', data)
         } else {
             fetcher.submit({
@@ -81,7 +84,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 storyId: currentStory.id,
                 currentTime: String(time),
                 currentChapterIndex: String(currentChapterIndex),
-                increment: String(increment)
+                increment: String(increment),
+                isPlaying: String(status)
             }, { method: 'post', action: '/resources/player' })
         }
     }, [fetcher])
@@ -98,8 +102,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         if (!isPlaying || !currentStory) return
 
         const interval = setInterval(() => {
-            saveProgress()
-        }, 10000)
+            saveProgress('fetcher', true)
+        }, 5000)
 
         return () => clearInterval(interval)
     }, [isPlaying, currentStory, saveProgress])
@@ -107,7 +111,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // Pagehide Listener
     useEffect(() => {
         const handleUnload = () => {
-            if (stateRef.current.isPlaying) saveProgress('beacon')
+            if (stateRef.current.isPlaying) saveProgress('beacon', false)
         }
         window.addEventListener('pagehide', handleUnload)
         return () => window.removeEventListener('pagehide', handleUnload)
@@ -144,7 +148,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }, [currentStory])
 
     const pause = useCallback(() => {
-        saveProgress()
+        saveProgress('fetcher', false)
         setIsPlaying(false)
         if (audioRef.current) audioRef.current.pause()
     }, [saveProgress])

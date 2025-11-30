@@ -94,10 +94,34 @@ export async function action({ request }: ActionFunctionArgs) {
         const globalLimitSeconds = globalLimitMinutes > 0 ? globalLimitMinutes * 60 : null
         const globalIntervalSeconds = globalIntervalHours > 0 ? globalIntervalHours * 3600 : 86400
 
+        // Audiobooks
+        const audiobookLimitMinutes = Number(formData.get('audiobookLimitMinutes'))
+        const audiobookIntervalHours = Number(formData.get('audiobookIntervalHours'))
+        const audiobookRestrictedStart = formData.get('audiobookRestrictedStart') ? Number(formData.get('audiobookRestrictedStart')) : null
+        const audiobookRestrictedEnd = formData.get('audiobookRestrictedEnd') ? Number(formData.get('audiobookRestrictedEnd')) : null
+        const audiobookLimitSeconds = audiobookLimitMinutes > 0 ? audiobookLimitMinutes * 60 : null
+        const audiobookIntervalSeconds = audiobookIntervalHours > 0 ? audiobookIntervalHours * 3600 : 86400
+
+        // Readalouds
+        const readaloudLimitMinutes = Number(formData.get('readaloudLimitMinutes'))
+        const readaloudIntervalHours = Number(formData.get('readaloudIntervalHours'))
+        const readaloudRestrictedStart = formData.get('readaloudRestrictedStart') ? Number(formData.get('readaloudRestrictedStart')) : null
+        const readaloudRestrictedEnd = formData.get('readaloudRestrictedEnd') ? Number(formData.get('readaloudRestrictedEnd')) : null
+        const readaloudLimitSeconds = readaloudLimitMinutes > 0 ? readaloudLimitMinutes * 60 : null
+        const readaloudIntervalSeconds = readaloudIntervalHours > 0 ? readaloudIntervalHours * 3600 : 86400
+
         await prisma.parentSettings.upsert({
             where: { userId },
-            update: { maxChaptersToPlay, showFullControls, timeZone, maxVolume, globalLimitSeconds, globalIntervalSeconds },
-            create: { userId, maxChaptersToPlay, showFullControls, timeZone, maxVolume, globalLimitSeconds, globalIntervalSeconds }
+            update: {
+                maxChaptersToPlay, showFullControls, timeZone, maxVolume, globalLimitSeconds, globalIntervalSeconds,
+                audiobookLimitSeconds, audiobookIntervalSeconds, audiobookRestrictedStart, audiobookRestrictedEnd,
+                readaloudLimitSeconds, readaloudIntervalSeconds, readaloudRestrictedStart, readaloudRestrictedEnd
+            },
+            create: {
+                userId, maxChaptersToPlay, showFullControls, timeZone, maxVolume, globalLimitSeconds, globalIntervalSeconds,
+                audiobookLimitSeconds, audiobookIntervalSeconds, audiobookRestrictedStart, audiobookRestrictedEnd,
+                readaloudLimitSeconds, readaloudIntervalSeconds, readaloudRestrictedStart, readaloudRestrictedEnd
+            }
         })
         return json({ success: true })
     }
@@ -221,6 +245,70 @@ export default function ParentSettings() {
                         </div>
                     </div>
                     <p className="text-xs text-muted-foreground">Applies to all content regardless of tags.</p>
+                </div>
+
+                {/* Audiobook Limits */}
+                <div className="space-y-2 pt-4 border-t">
+                    <h3 className="font-medium text-sm flex items-center gap-2">
+                        <Icon name="file-text" className="h-4 w-4" />
+                        Audiobook Limits
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                             <Label htmlFor="audiobookLimitMinutes">Limit (Min)</Label>
+                             <Input type="number" id="audiobookLimitMinutes" name="audiobookLimitMinutes"
+                                defaultValue={settings?.audiobookLimitSeconds ? Math.floor(settings.audiobookLimitSeconds / 60) : ''} min="0" />
+                        </div>
+                        <div>
+                             <Label htmlFor="audiobookIntervalHours">Reset (Hrs)</Label>
+                             <Input type="number" id="audiobookIntervalHours" name="audiobookIntervalHours"
+                                defaultValue={settings?.audiobookIntervalSeconds ? Math.floor(settings.audiobookIntervalSeconds / 3600) : 24} min="1" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                         <div>
+                             <Label htmlFor="audiobookRestrictedStart">Disable Start (Hr)</Label>
+                             <Input type="number" id="audiobookRestrictedStart" name="audiobookRestrictedStart"
+                                defaultValue={settings?.audiobookRestrictedStart ?? ''} min="0" max="23" />
+                         </div>
+                         <div>
+                             <Label htmlFor="audiobookRestrictedEnd">Disable End (Hr)</Label>
+                             <Input type="number" id="audiobookRestrictedEnd" name="audiobookRestrictedEnd"
+                                defaultValue={settings?.audiobookRestrictedEnd ?? ''} min="0" max="23" />
+                         </div>
+                    </div>
+                </div>
+
+                {/* Readaloud Limits */}
+                <div className="space-y-2 pt-4 border-t">
+                    <h3 className="font-medium text-sm flex items-center gap-2">
+                        <Icon name="camera" className="h-4 w-4" />
+                        Read-Aloud Limits
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                             <Label htmlFor="readaloudLimitMinutes">Limit (Min)</Label>
+                             <Input type="number" id="readaloudLimitMinutes" name="readaloudLimitMinutes"
+                                defaultValue={settings?.readaloudLimitSeconds ? Math.floor(settings.readaloudLimitSeconds / 60) : ''} min="0" />
+                        </div>
+                        <div>
+                             <Label htmlFor="readaloudIntervalHours">Reset (Hrs)</Label>
+                             <Input type="number" id="readaloudIntervalHours" name="readaloudIntervalHours"
+                                defaultValue={settings?.readaloudIntervalSeconds ? Math.floor(settings.readaloudIntervalSeconds / 3600) : 24} min="1" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                         <div>
+                             <Label htmlFor="readaloudRestrictedStart">Disable Start (Hr)</Label>
+                             <Input type="number" id="readaloudRestrictedStart" name="readaloudRestrictedStart"
+                                defaultValue={settings?.readaloudRestrictedStart ?? ''} min="0" max="23" />
+                         </div>
+                         <div>
+                             <Label htmlFor="readaloudRestrictedEnd">Disable End (Hr)</Label>
+                             <Input type="number" id="readaloudRestrictedEnd" name="readaloudRestrictedEnd"
+                                defaultValue={settings?.readaloudRestrictedEnd ?? ''} min="0" max="23" />
+                         </div>
+                    </div>
                 </div>
 
                 <div className="space-y-2">

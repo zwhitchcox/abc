@@ -211,11 +211,12 @@ function App() {
 	const location = useLocation()
 	const isFullScreen =
 		fullScreenRoutes[location.pathname as keyof typeof fullScreenRoutes] ||
-        location.pathname.startsWith('/stories')
+        location.pathname.startsWith('/stories') ||
+        location.pathname === '/timeout'
 
-    // Hide sidebar trigger specifically for stories routes
-    const isStories = location.pathname.startsWith('/stories')
-    const showSidebarTrigger = !isStories
+    // Hide sidebar trigger specifically for stories/timeout routes
+    const isStoriesOrTimeout = location.pathname.startsWith('/stories') || location.pathname === '/timeout'
+    const showSidebarTrigger = !isStoriesOrTimeout
 
 	return (
         <PlayerProvider>

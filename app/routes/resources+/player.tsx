@@ -13,14 +13,15 @@ export async function action({ request }: ActionFunctionArgs) {
         const currentTime = Number(formData.get('currentTime'))
         const increment = Number(formData.get('increment'))
         const currentChapterIndex = Number(formData.get('currentChapterIndex'))
+        const isPlaying = formData.get('isPlaying') === 'true'
 
         if (!storyId) return json({ error: 'Missing storyId' }, { status: 400 })
 
         // 1. Save Progress
         await prisma.storyProgress.upsert({
             where: { userId_storyId: { userId, storyId } },
-            update: { currentTime, currentChapterIndex },
-            create: { userId, storyId, currentTime, currentChapterIndex }
+            update: { currentTime, currentChapterIndex, isPlaying },
+            create: { userId, storyId, currentTime, currentChapterIndex, isPlaying }
         })
 
         // 2. Log Usage
@@ -57,6 +58,63 @@ export async function action({ request }: ActionFunctionArgs) {
                  if (globalTotal >= parentSettings.globalLimitSeconds) {
                       return json({ success: true, limitReached: true, reason: 'Global Time Limit Reached' })
                  }
+            }
+
+            // Check Type Limits
+            if (parentSettings && story) {
+                const isAudiobook = story.type === 'audiobook'
+                const isReadaloud = story.type === 'readaloud'
+
+                let limitSeconds: number | null = null
+                let intervalSeconds = 86400
+                let restrictedStart: number | null = null
+                let restrictedEnd: number | null = null
+                let typeName = ''
+
+                if (isAudiobook) {
+                    limitSeconds = parentSettings.audiobookLimitSeconds
+                    intervalSeconds = parentSettings.audiobookIntervalSeconds
+                    restrictedStart = parentSettings.audiobookRestrictedStart
+                    restrictedEnd = parentSettings.audiobookRestrictedEnd
+                    typeName = 'Audiobook'
+                } else if (isReadaloud) {
+                    limitSeconds = parentSettings.readaloudLimitSeconds
+                    intervalSeconds = parentSettings.readaloudIntervalSeconds
+                    restrictedStart = parentSettings.readaloudRestrictedStart
+                    restrictedEnd = parentSettings.readaloudRestrictedEnd
+                    typeName = 'Read Aloud'
+                }
+
+                if (typeName) {
+                    // Type Hours Check
+                    if (restrictedStart !== null && restrictedEnd !== null) {
+                         try {
+                            const formatter = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: false })
+                            const hour = parseInt(formatter.format(now)) % 24
+                            let inRange = false
+                            if (restrictedStart < restrictedEnd) {
+                                inRange = hour >= restrictedStart && hour < restrictedEnd
+                            } else if (restrictedStart > restrictedEnd) {
+                                 inRange = hour >= restrictedStart || hour < restrictedEnd
+                            }
+                            if (inRange) return json({ success: true, limitReached: true, reason: `${typeName} Restricted Hours` })
+                        } catch {}
+                    }
+
+                    // Type Usage Check
+                    if (limitSeconds) {
+                         const windowStart = new Date(now.getTime() - intervalSeconds * 1000)
+                         const typeLogs = await prisma.usageLog.findMany({
+                             where: {
+                                 userId,
+                                 story: { type: story.type },
+                                 createdAt: { gt: windowStart }
+                             }
+                         })
+                         const typeTotal = typeLogs.reduce((acc, log) => acc + log.secondsPlayed, 0)
+                         if (typeTotal >= limitSeconds) return json({ success: true, limitReached: true, reason: `${typeName} Time Limit Reached` })
+                    }
+                }
             }
 
             if (!story?.tags || story.tags.length === 0) {

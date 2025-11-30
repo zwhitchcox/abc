@@ -44,6 +44,18 @@ model ParentSettings {
   maxVolume             Int     @default(100)
   globalLimitSeconds    Int?
   globalIntervalSeconds Int     @default(86400) // 24 hours
+
+  // Audiobook Specific
+  audiobookLimitSeconds    Int?
+  audiobookIntervalSeconds Int  @default(86400)
+  audiobookRestrictedStart Int?
+  audiobookRestrictedEnd   Int?
+
+  // Readaloud (Video) Specific
+  readaloudLimitSeconds    Int?
+  readaloudIntervalSeconds Int  @default(86400)
+  readaloudRestrictedStart Int?
+  readaloudRestrictedEnd   Int?
 }
 
 model Note {
@@ -289,8 +301,9 @@ model StoryProgress {
   story   Story  @relation(fields: [storyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   storyId String
 
-  currentChapterIndex Int   @default(0)
-  currentTime         Float @default(0)
+  currentChapterIndex Int     @default(0)
+  currentTime         Float   @default(0)
+  isPlaying           Boolean @default(false)
 
   @@unique([userId, storyId])
   @@index([userId])

@@ -86,6 +86,64 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
              }
         }
 
+        // Check Type Limits
+        if (parentSettings) {
+            const isAudiobook = story.type === 'audiobook'
+            const isReadaloud = story.type === 'readaloud'
+
+            let limitSeconds: number | null = null
+            let intervalSeconds = 86400
+            let restrictedStart: number | null = null
+            let restrictedEnd: number | null = null
+            let typeName = ''
+
+            if (isAudiobook) {
+                limitSeconds = parentSettings.audiobookLimitSeconds
+                intervalSeconds = parentSettings.audiobookIntervalSeconds
+                restrictedStart = parentSettings.audiobookRestrictedStart
+                restrictedEnd = parentSettings.audiobookRestrictedEnd
+                typeName = 'Audiobook'
+            } else if (isReadaloud) {
+                limitSeconds = parentSettings.readaloudLimitSeconds
+                intervalSeconds = parentSettings.readaloudIntervalSeconds
+                restrictedStart = parentSettings.readaloudRestrictedStart
+                restrictedEnd = parentSettings.readaloudRestrictedEnd
+                typeName = 'Read Aloud'
+            }
+
+            if (typeName) {
+                // Type Hours Check
+                if (restrictedStart !== null && restrictedEnd !== null) {
+                     try {
+                        const formatter = new Intl.DateTimeFormat('en-US', { timeZone: parentSettings.timeZone || 'UTC', hour: 'numeric', hour12: false })
+                        const hour = parseInt(formatter.format(new Date())) % 24
+                        let inRange = false
+                        if (restrictedStart < restrictedEnd) {
+                            inRange = hour >= restrictedStart && hour < restrictedEnd
+                        } else if (restrictedStart > restrictedEnd) {
+                             inRange = hour >= restrictedStart || hour < restrictedEnd
+                        }
+                        if (inRange) throw redirect(`/timeout?reason=${encodeURIComponent(typeName + ' Restricted Hours')}`)
+                    } catch {}
+                }
+
+                // Type Usage Check
+                if (limitSeconds) {
+                     const now = new Date()
+                     const windowStart = new Date(now.getTime() - intervalSeconds * 1000)
+                     const typeLogs = await prisma.usageLog.findMany({
+                         where: {
+                             userId,
+                             story: { type: story.type },
+                             createdAt: { gt: windowStart }
+                         }
+                     })
+                     const typeTotal = typeLogs.reduce((acc, log) => acc + log.secondsPlayed, 0)
+                     if (typeTotal >= limitSeconds) throw redirect(`/timeout?reason=${encodeURIComponent(typeName + ' Time Limit Reached')}`)
+                }
+            }
+        }
+
         // Hybrid Restriction Check
         if (!story.tags || story.tags.length === 0) {
             throw redirect(`/timeout?reason=No Tags Assigned`)

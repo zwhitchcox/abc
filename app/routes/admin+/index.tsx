@@ -1,5 +1,6 @@
 import { json, type LoaderFunctionArgs } from '@remix-run/node'
-import { Link, useLoaderData, useSubmit } from '@remix-run/react'
+import { Link, useLoaderData, useSubmit, useRevalidator } from '@remix-run/react'
+import { useEffect } from 'react'
 import { Button } from '#app/components/ui/button.tsx'
 import { Icon } from '#app/components/ui/icon.tsx'
 import { prisma } from '#app/utils/db.server.ts'
@@ -53,15 +54,39 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const totalSeconds = totalUsage._sum.secondsPlayed || 0
 
-    // Check if active (last update within 2 minutes)
-    const isLive = lastActivity && (Date.now() - new Date(lastActivity.updatedAt).getTime() < 2 * 60 * 1000)
+    // Check activity status
+    const diff = lastActivity ? Date.now() - new Date(lastActivity.updatedAt).getTime() : Infinity
+    const isRecentlyActive = diff < 30 * 1000 // 30 seconds buffer
 
-    return json({ storyCount, tagCount, recentStories, totalSeconds, lastActivity, isLive, period })
+    let status = 'Idle'
+    let isLive = false
+
+    if (isRecentlyActive && lastActivity) {
+        if (lastActivity.isPlaying) {
+            status = 'Playing Now'
+            isLive = true
+        } else {
+            status = 'Paused'
+        }
+    }
+
+    return json({ storyCount, tagCount, recentStories, totalSeconds, lastActivity, isLive, status, period })
 }
 
 export default function AdminDashboard() {
-    const { storyCount, tagCount, recentStories, totalSeconds, lastActivity, isLive, period } = useLoaderData<typeof loader>()
+    const { storyCount, tagCount, recentStories, totalSeconds, lastActivity, isLive, status, period } = useLoaderData<typeof loader>()
     const submit = useSubmit()
+    const { revalidate } = useRevalidator()
+
+    // Auto-refresh for Playing Now status
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                revalidate()
+            }
+        }, 5000)
+        return () => clearInterval(interval)
+    }, [revalidate])
 
     // Helper to format timestamp
     const formatTime = (seconds: number) => {
@@ -110,10 +135,14 @@ export default function AdminDashboard() {
 
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                            {isLive ? (
+                            {status === 'Playing Now' ? (
                                 <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded-full animate-pulse">
                                     <span className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
                                     Playing Now
+                                </span>
+                            ) : status === 'Paused' ? (
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/50 px-2 py-0.5 rounded-full">
+                                    Paused
                                 </span>
                             ) : (
                                 <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 bg-stone-200 dark:bg-stone-700 px-2 py-0.5 rounded-full">
@@ -121,7 +150,7 @@ export default function AdminDashboard() {
                                 </span>
                             )}
                             <span className="text-xs text-muted-foreground">
-                                • {isLive ? 'Active just now' : `Last active ${new Date(lastActivity.updatedAt).toLocaleString()}`}
+                                • {status === 'Playing Now' ? 'Active just now' : `Last active ${new Date(lastActivity.updatedAt).toLocaleString()}`}
                             </span>
                         </div>
                         <h2 className="text-2xl font-bold text-stone-900 dark:text-stone-100 truncate">{lastActivity.story.title}</h2>
