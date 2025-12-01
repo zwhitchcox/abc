@@ -195,13 +195,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             if (currentChapter.endTime && time >= currentChapter.endTime) {
                 // Auto advance? Or pause?
                 // For now pause to match user preference of "one chapter at a time" unless configured otherwise
-                // But logic for auto-advance is complex (parent settings).
-                // I'll simple pause for now, or let the component handle it?
-                // Global player should handle it.
-                // I'll implement auto-advance logic later or assume simple next.
                 // Default behavior: Pause at end of chapter
                 pause()
-                // If we want auto-advance, we need ParentSettings in context.
+
+                // If it's the last chapter, navigate back to stories
+                if (currentStory && currentChapterIndex >= currentStory.chapters.length - 1) {
+                    navigate('/stories')
+                }
             }
         }
     }
@@ -254,7 +254,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                         }
                     }}
                     onTimeUpdate={onTimeUpdate}
-                    onEnded={pause}
+                    onEnded={() => {
+                        pause()
+                        navigate('/stories')
+                    }}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     preload="auto"

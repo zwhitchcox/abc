@@ -368,6 +368,7 @@ export default function StoryPlayer() {
                             playsInline
                             onPlay={resume}
                             onPause={pause}
+                            onEnded={() => navigate('/stories')}
                         />
                     )}
                 </div>
