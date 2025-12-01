@@ -247,11 +247,24 @@ export default function StoryPlayer() {
     // Init Player
     useEffect(() => {
         if (currentStory?.id !== story.id) {
-            play(story as any, progress?.currentChapterIndex ?? 0, progress?.currentTime)
+            let startChapter = progress?.currentChapterIndex ?? 0
+            let startTime = progress?.currentTime
+
+            // Check if story was previously finished (Audiobook with chapters)
+            if (story.chapters.length > 0) {
+                const lastChapterIndex = story.chapters.length - 1
+                const lastChapter = story.chapters[lastChapterIndex]
+                if (startChapter === lastChapterIndex && lastChapter?.endTime && startTime && startTime >= lastChapter.endTime - 2) {
+                     startChapter = 0
+                     startTime = 0
+                }
+            }
+
+            play(story as any, startChapter, startTime)
 
             // Safety net: Ensure seek happens even if race condition occurs
-            if (progress?.currentTime) {
-                const t = progress.currentTime
+            if (startTime) {
+                const t = startTime
                 setTimeout(() => seek(t), 100)
                 setTimeout(() => seek(t), 500) // Double tap to be sure
             }
@@ -310,6 +323,13 @@ export default function StoryPlayer() {
         if (!video || !savedTime || savedTime < 1) return
 
         const restore = () => {
+             // If saved time is near the end (within 5 seconds), restart
+             if (video.duration && savedTime >= video.duration - 5) {
+                 video.currentTime = 0
+                 seek(0)
+                 return
+             }
+
              if (Math.abs(video.currentTime - savedTime) > 1) {
                  video.currentTime = savedTime
              }
