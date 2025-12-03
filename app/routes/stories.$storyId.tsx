@@ -323,13 +323,6 @@ export default function StoryPlayer() {
         if (!video || !savedTime || savedTime < 1) return
 
         const restore = () => {
-             // If saved time is near the end (within 5 seconds), restart
-             if (video.duration && savedTime >= video.duration - 5) {
-                 video.currentTime = 0
-                 seek(0)
-                 return
-             }
-
              if (Math.abs(video.currentTime - savedTime) > 1) {
                  video.currentTime = savedTime
              }
@@ -388,11 +381,7 @@ export default function StoryPlayer() {
                             playsInline
                             onPlay={resume}
                             onPause={pause}
-                            onEnded={() => {
-                                if (videoRef.current) videoRef.current.pause()
-                                pause()
-                                navigate(`/resources/reset-story/${story.id}`, { replace: true })
-                            }}
+                            onEnded={() =>navigate(`/resources/reset-story/${story.id}`, { replace: true })}
                         />
                     )}
                 </div>
