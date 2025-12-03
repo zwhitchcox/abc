@@ -1,4 +1,4 @@
-import { useFetcher, useNavigate, useLocation } from '@remix-run/react'
+import { useFetcher, useNavigate } from '@remix-run/react'
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 
 type Story = {
@@ -49,7 +49,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => { fetcherRef.current = fetcher }, [fetcher])
 
     const navigate = useNavigate()
-    const location = useLocation()
     const lastSaveTimeRef = useRef(Date.now())
     const restoreTimeRef = useRef<number | null>(null)
     const handledDataRef = useRef<any>(null)

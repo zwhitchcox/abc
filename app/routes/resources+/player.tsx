@@ -16,7 +16,6 @@ export async function action({ request }: ActionFunctionArgs) {
         const isPlaying = formData.get('isPlaying') === 'true'
 
         if (!storyId) return json({ error: 'Missing storyId' }, { status: 400 })
-        console.log(' 333 tracking usage', {storyId, currentTime, increment, currentChapterIndex, isPlaying})
 
         // 1. Save Progress
         await prisma.storyProgress.upsert({

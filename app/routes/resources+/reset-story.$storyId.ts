@@ -6,9 +6,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	const userId = await getUserId(request)
 	const storyId = params.storyId
 
-	console.log(' 111 resetting story progress', userId, storyId)
 	if (userId && storyId) {
-		console.log('resetting story progress', userId, storyId)
 		await prisma.storyProgress.upsert({
 			where: { userId_storyId: { userId, storyId } },
 			update: { currentTime: 0, currentChapterIndex: 0, isPlaying: false },
