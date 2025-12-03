@@ -8,19 +8,22 @@ import YtDlpWrapImport from 'yt-dlp-wrap'
 const YtDlpWrap = (YtDlpWrapImport as any).default ?? YtDlpWrapImport
 
 async function ensureYtDlp() {
-    try {
-        execSync('which yt-dlp', { stdio: 'ignore' })
-        return 'yt-dlp'
-    } catch {
-        const binaryPath = path.join(process.cwd(), 'bin', 'yt-dlp')
-        if (!fs.existsSync(binaryPath)) {
-            console.log('Downloading yt-dlp binary to', binaryPath)
-            await fs.promises.mkdir(path.dirname(binaryPath), { recursive: true })
-            await YtDlpWrap.downloadFromGithub(binaryPath)
-            await fs.promises.chmod(binaryPath, '755')
+    const binaryPath = path.join(process.cwd(), 'bin', 'yt-dlp')
+
+    if (!fs.existsSync(binaryPath)) {
+        console.log('Downloading yt-dlp binary to', binaryPath)
+        await fs.promises.mkdir(path.dirname(binaryPath), { recursive: true })
+        await YtDlpWrap.downloadFromGithub(binaryPath)
+        await fs.promises.chmod(binaryPath, '755')
+    } else {
+        try {
+             console.log('Checking for yt-dlp updates...')
+             execSync(`${binaryPath} -U`, { stdio: 'inherit' })
+        } catch (e) {
+            console.warn('Failed to update yt-dlp, continuing with existing version')
         }
-        return binaryPath
     }
+    return binaryPath
 }
 
 function askQuestion(query: string): Promise<string> {
@@ -63,6 +66,14 @@ async function download() {
         console.log('Downloading single video...')
     }
 
+    let playlistStartIndex: string | null = null
+    try {
+        const urlObj = new URL(url)
+        playlistStartIndex = urlObj.searchParams.get('index')
+    } catch {
+        // ignore invalid url parsing, handled by yt-dlp later
+    }
+
     console.log(`Saving to ${outputDir}...`)
 
     const outputTemplate = isPlaylist
@@ -86,6 +97,11 @@ async function download() {
         isPlaylist ? '--yes-playlist' : '--no-playlist',
         '--ignore-errors',
     ]
+
+    if (isPlaylist && playlistStartIndex) {
+        console.log(`Starting playlist from index ${playlistStartIndex}`)
+        args.push('--playlist-items', `${playlistStartIndex}:`)
+    }
 
     console.log('Running yt-dlp...')
 
