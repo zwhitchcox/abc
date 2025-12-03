@@ -66,6 +66,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 userId_storyId: { userId, storyId: params.storyId }
             }
         })
+        console.log(' 222 progress', {progress})
         parentSettings = await prisma.parentSettings.findUnique({
             where: { userId }
         })
@@ -240,6 +241,7 @@ export default function StoryPlayer() {
     // Pause on unmount (leaving the page)
     useEffect(() => {
         return () => {
+            if (hasEndedRef.current) return
             pause()
         }
     }, [pause])
@@ -268,8 +270,10 @@ export default function StoryPlayer() {
                 setTimeout(() => seek(t), 100)
                 setTimeout(() => seek(t), 500) // Double tap to be sure
             }
+        } else if (!isPlaying) {
+            resume()
         }
-    }, [story, play, currentStory, progress, seek])
+    }, [story, play, currentStory, progress, seek, isPlaying, resume])
 
     // Secret menu trigger
     const handleTitleClick = () => {
@@ -288,6 +292,8 @@ export default function StoryPlayer() {
 	const hasNextChapter = currentChapterIndex < story.chapters.length - 1
 	const hasPrevChapter = currentChapterIndex > 0
 
+    const hasEndedRef = useRef(false)
+
     const showFullControls = parentSettings?.showFullControls ?? false
 
     const chapterDuration = currentChapter ? (currentChapter.endTime ?? 0) - currentChapter.startTime : 0
@@ -305,7 +311,7 @@ export default function StoryPlayer() {
 
     // Sync Video Time with Context (to trigger progress saves)
     const onVideoTimeUpdate = () => {
-        if (videoRef.current) {
+        if (videoRef.current && !hasEndedRef.current) {
             const t = videoRef.current.currentTime
             // Ignore 0 if we are restoring a saved time
             if (t === 0 && progress?.currentTime && progress.currentTime > 1) {
@@ -380,8 +386,11 @@ export default function StoryPlayer() {
                             className="max-w-full max-h-screen w-full aspect-video"
                             playsInline
                             onPlay={resume}
-                            onPause={pause}
-                            onEnded={() =>navigate(`/resources/reset-story/${story.id}`, { replace: true })}
+                            onPause={() => { if (!hasEndedRef.current) pause() }}
+                            onEnded={() => {
+                                hasEndedRef.current = true
+                                navigate(`/resources/reset-story/${story.id}`, { replace: true })
+                            }}
                         />
                     )}
                 </div>
