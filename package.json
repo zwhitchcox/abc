@@ -31,6 +31,7 @@
     "validate": "run-p \"test -- --run\" lint typecheck test:e2e:run",
     "download-images": "tsx scripts/download-images-batch.ts",
     "check-images": "tsx scripts/check-images.ts",
+    "yt-dlp": "tsx scripts/yt-dlp.ts",
     "upload-images": "./scripts/upload-images-compressed.sh",
     "sync-images": "npm run download-images && npm run upload-images"
   },
@@ -115,6 +116,7 @@
     "tailwindcss-animate": "^1.0.7",
     "tailwindcss-radix": "^3.0.5",
     "vite-env-only": "^3.0.3",
+    "xxhash-wasm": "^1.1.0",
     "yt-dlp-wrap": "^2.3.12",
     "zod": "^3.23.8"
   },

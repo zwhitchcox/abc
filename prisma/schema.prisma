@@ -57,6 +57,11 @@ model ParentSettings {
   readaloudIntervalSeconds Int  @default(86400)
   readaloudRestrictedStart Int?
   readaloudRestrictedEnd   Int?
+
+  // Video Dimming Settings
+  videoDimmingStart Int?
+  videoDimmingEnd   Int?
+  videoDimmingLevel Int  @default(0) // 0 = Audio Only (Hidden), 1-100 = Opacity %
 }
 
 model Note {
@@ -284,6 +289,7 @@ model AudioFile {
   contentType String
   blob        Bytes? // Optional for backward compat / if we use filepath
   filepath    String?
+  fileHash    String? @unique // SHA-256 or xxHash of the file content
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

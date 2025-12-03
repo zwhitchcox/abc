@@ -15,7 +15,7 @@ import {
 } from '@remix-run/node'
 import { Form, useActionData, useLoaderData } from '@remix-run/react'
 import ffprobeStatic from 'ffprobe-static'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import YtDlpWrapImport from 'yt-dlp-wrap'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { Button } from '#app/components/ui/button.tsx'
@@ -23,9 +23,12 @@ import { Label } from '#app/components/ui/label.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { getUserId } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
+import { findCoverImage } from '#app/utils/image-search.server.ts'
 import { createJob, updateJobProgress, completeJob, failJob } from '#app/utils/jobs.server.ts'
 import { useIsPending } from '#app/utils/misc.tsx'
 import { requireUserWithRole } from '#app/utils/permissions.server.ts'
+// eslint-disable-next-line import/order
+import xxhash from 'xxhash-wasm'
 
 const YtDlpWrap = (YtDlpWrapImport as any).default ?? YtDlpWrapImport
 
@@ -542,82 +545,164 @@ export async function action({ request }: ActionFunctionArgs) {
         return redirect(`/admin/jobs`)
     }
 
-    // Audiobook Handling
-	const filepath = formData.get('audiobookFile')
+    // File Upload Handling (Audiobooks & Videos)
+	const filepaths = formData.getAll('audiobookFile')
 
-	if (typeof filepath !== 'string' || !filepath) {
+    // Filter out empty strings or non-strings
+    const validFilepaths = filepaths.filter(fp => typeof fp === 'string' && fp.length > 0) as string[]
+
+	if (storyType === 'audiobook' && validFilepaths.length === 0) {
 		return json(
 			{ error: 'File upload failed' },
 			{ status: 400 },
 		)
 	}
 
-	const { parseFile } = await import('music-metadata')
-	const metadata = await parseFile(filepath)
-	const { common } = metadata
+    if (storyType === 'audiobook') {
+        const { parseFile } = await import('music-metadata')
+        const { create64 } = await xxhash()
 
-	const originalFilename = path.basename(filepath).split('-').slice(2).join('-')
-	const title = common.title ?? originalFilename.replace(/\.[^/.]+$/, "")
-	const coverPicture = common.picture?.[0]
+        for (const filepath of validFilepaths) {
+            try {
+                // Calculate hash of the file content
+                const fileBuffer = await fs.promises.readFile(filepath)
+                const hasher = create64()
+                hasher.update(new Uint8Array(fileBuffer))
+                const fileHash = hasher.digest().toString(16)
 
-	const mimeType = filepath.endsWith('.mp3') ? 'audio/mpeg' : 'audio/mp4'
+                // Check for existing story with this hash
+                // @ts-ignore - prisma client might be stale in editor
+                const existingAudio = await prisma.audioFile.findUnique({
+                    where: { fileHash },
+                    select: { story: { select: { title: true, id: true } } }
+                })
 
-	const story = await prisma.story.create({
-		data: {
-			title,
-            type: 'audiobook',
-            tags: tagIds.length > 0 ? { connect: tagIds.map(id => ({ id })) } : undefined,
-			images: coverPicture ? {
-				create: {
-					contentType: coverPicture.format,
-					blob: Buffer.from(coverPicture.data),
-					altText: title,
-				},
-			} : undefined,
-			audio: {
-				create: {
-					contentType: mimeType,
-					filepath: filepath,
-				},
-			},
-		},
-	})
+                // @ts-ignore
+                if (existingAudio && existingAudio.story) {
+                    // @ts-ignore
+                    console.log(`Skipping duplicate file ${filepath} (matches story: ${existingAudio.story.title})`)
+                    // Cleanup duplicate file
+                    await fs.promises.unlink(filepath).catch(() => {})
+                    continue
+                }
 
-    let chapters: any[] = []
-    let duration = 0
+                // Determine type based on extension
+                const ext = path.extname(filepath).toLowerCase()
+                const isVideo = ['.mp4', '.mkv', '.webm', '.mov'].includes(ext)
+                const mimeType = isVideo
+                    ? (ext === '.webm' ? 'video/webm' : 'video/mp4')
+                    : (ext === '.mp3' ? 'audio/mpeg' : 'audio/mp4')
 
-    try {
-        console.log('Running custom ffprobe on:', filepath)
-        const info = await probe(filepath)
-        console.log('FFPROBE info chapters:', info.chapters ? info.chapters.length : 'None')
-        chapters = info.chapters || []
-        duration = info.format?.duration || 0
-    } catch (e) {
-        console.error('ffprobe failed:', e)
-        duration = metadata.format.duration || 0
+                const type = isVideo ? 'readaloud' : 'audiobook'
+
+                let metadata: any = { common: {}, format: {} }
+                try {
+                    metadata = await parseFile(filepath)
+                } catch (e) {
+                    console.warn('Failed to parse metadata for', filepath, e)
+                }
+
+                const { common } = metadata
+
+                const originalFilename = path.basename(filepath).split('-').slice(2).join('-')
+                const title = common.title ?? originalFilename.replace(/\.[^/.]+$/, "")
+                let coverPicture = common.picture?.[0]
+                let coverBlob: Buffer | null = coverPicture ? Buffer.from(coverPicture.data) : null
+                let coverContentType = coverPicture ? coverPicture.format : 'image/jpeg'
+
+                let originalLink: string | null = null
+                if (common.comment && common.comment.length > 0) {
+                    // music-metadata might return strings or objects { text: '...' }
+                    const comment = common.comment[0] as any
+                    const potentialId = typeof comment === 'string' ? comment : comment?.text
+
+                    if (potentialId && /^[a-zA-Z0-9_-]{11}$/.test(potentialId)) {
+                        originalLink = `https://www.youtube.com/watch?v=${potentialId}`
+                    }
+                }
+
+                // If no cover art and it's a video, try to fetch from Bing
+                if (!coverBlob) {
+                    console.log(`No cover art found for ${title}, searching Bing...`)
+                    const bingImage = await findCoverImage(`${title} hardcover`)
+                    if (bingImage) {
+                        coverBlob = bingImage.blob
+                        coverContentType = bingImage.contentType
+                    }
+                }
+
+                console.log(`[Upload] Processing file: ${originalFilename}`)
+                console.log(`[Upload] Title: ${title}`)
+                console.log(`[Upload] Original Link: ${originalLink}`)
+                console.log(`[Upload] File Hash: ${fileHash}`)
+                console.log(`[Upload] Has Cover: ${!!coverBlob} (${coverContentType})`)
+                console.log(`[Upload] Comments:`, common.comment)
+
+                const story = await prisma.story.create({
+                    data: {
+                        title,
+                        type,
+                        originalLink,
+                        tags: tagIds.length > 0 ? { connect: tagIds.map(id => ({ id })) } : undefined,
+                        images: coverBlob ? {
+                            create: {
+                                contentType: coverContentType,
+                                blob: coverBlob,
+                                altText: title,
+                            },
+                        } : undefined,
+                        audio: {
+                            create: {
+                                contentType: mimeType,
+                                filepath: filepath,
+                                // @ts-ignore
+                                fileHash,
+                            },
+                        },
+                    },
+                })
+
+                let chapters: any[] = []
+                let duration = 0
+
+                try {
+                    console.log('Running custom ffprobe on:', filepath)
+                    const info = await probe(filepath)
+                    // console.log('FFPROBE info chapters:', info.chapters ? info.chapters.length : 'None')
+                    chapters = info.chapters || []
+                    duration = info.format?.duration || 0
+                } catch (e) {
+                    console.error('ffprobe failed:', e)
+                    duration = metadata.format?.duration || 0
+                }
+
+                if (chapters.length > 0) {
+                    await prisma.chapter.createMany({
+                        data: chapters.map((c: any, i: number) => ({
+                            title: c.tags?.title || `Chapter ${i + 1}`,
+                            order: i,
+                            startTime: parseFloat(c.start_time),
+                            endTime: parseFloat(c.end_time),
+                            storyId: story.id,
+                        })),
+                    })
+                } else {
+                    await prisma.chapter.create({
+                        data: {
+                            title: isVideo ? "Full Video" : "Full Audiobook",
+                            order: 0,
+                            startTime: 0,
+                            endTime: parseFloat(String(duration)),
+                            storyId: story.id,
+                        },
+                    })
+                }
+            } catch (error) {
+                console.error(`Error processing file ${filepath}:`, error)
+                // Continue to next file
+            }
+        }
     }
-
-	if (chapters.length > 0) {
-		await prisma.chapter.createMany({
-			data: chapters.map((c: any, i: number) => ({
-				title: c.tags?.title || `Chapter ${i + 1}`,
-				order: i,
-				startTime: parseFloat(c.start_time),
-				endTime: parseFloat(c.end_time),
-				storyId: story.id,
-			})),
-		})
-	} else {
-		await prisma.chapter.create({
-			data: {
-				title: "Full Audiobook",
-				order: 0,
-				startTime: 0,
-				endTime: parseFloat(String(duration)),
-				storyId: story.id,
-			},
-		})
-	}
 
 	return redirect(`/admin/stories`)
 }
@@ -632,6 +717,7 @@ export default function NewStory() {
 		id: 'story-editor',
 		shouldRevalidate: 'onBlur',
 	})
+    const playlistCheckboxRef = useRef<HTMLInputElement>(null)
 
 	return (
 		<div className="container mx-auto p-6">
@@ -656,7 +742,7 @@ export default function NewStory() {
                                         onChange={() => setStoryType('audiobook')}
                                         className="w-4 h-4 text-orange-600"
                                     />
-                                    Audiobook (M4B/MP3)
+                                    Audiobook / Video Upload
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
@@ -701,16 +787,58 @@ export default function NewStory() {
                     </div>
 
                     {storyType === 'audiobook' ? (
-                        <div>
-                            <Label htmlFor="audiobookFile">Audiobook File (.m4b, .mp3)</Label>
+                        <div
+                            className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-orange-500 transition-colors bg-slate-50 dark:bg-slate-900"
+                            onDragOver={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                e.currentTarget.classList.add('border-orange-500')
+                            }}
+                            onDragLeave={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                e.currentTarget.classList.remove('border-orange-500')
+                            }}
+                            onDrop={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                e.currentTarget.classList.remove('border-orange-500')
+                                const files = e.dataTransfer.files
+                                if (files && files.length > 0) {
+                                    const input = document.getElementById('audiobookFile') as HTMLInputElement
+                                    if (input) {
+                                        input.files = files
+                                        // Trigger change event manually if needed, but setting files usually enough for submission
+                                        // Visual update:
+                                        const count = files.length
+                                        const label = document.getElementById('file-count-label')
+                                        if (label) label.innerText = count > 0 ? `${count} files selected` : ''
+                                    }
+                                }
+                            }}
+                        >
+                            <Label htmlFor="audiobookFile" className="cursor-pointer block w-full h-full">
+                                <div className="flex flex-col items-center justify-center gap-2 pointer-events-none">
+                                    <span className="text-4xl">📂</span>
+                                    <span className="font-medium text-lg">Click to Upload or Drag & Drop</span>
+                                    <span className="text-sm text-muted-foreground">Support for Audio (.mp3, .m4b) and Video (.mp4, .mkv, .webm)</span>
+                                </div>
+                            </Label>
                             <input
                                 id="audiobookFile"
                                 name="audiobookFile"
                                 type="file"
-                                accept=".m4b,.mp3,audio/*"
+                                accept=".m4b,.mp3,.mp4,.mkv,.webm,audio/*,video/*"
                                 required
-                                className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
+                                multiple
+                                className="hidden"
+                                onChange={(e) => {
+                                    const count = e.target.files?.length || 0
+                                    const label = document.getElementById('file-count-label')
+                                    if (label) label.innerText = count > 0 ? `${count} files selected` : ''
+                                }}
                             />
+                            <p id="file-count-label" className="mt-4 text-sm font-medium text-orange-600 h-5"></p>
                         </div>
                     ) : (
                         <>
@@ -722,6 +850,20 @@ export default function NewStory() {
                                     required
                                     placeholder="https://www.youtube.com/watch?v=..."
                                     className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    onChange={(e) => {
+                                        const val = e.target.value
+                                        if ((val.includes('list=') || val.includes('/playlist'))) {
+                                            // Check if we already prompted or if checked
+                                            if (!playlistCheckboxRef.current?.checked) {
+                                                 // Use setTimeout to avoid blocking the render/input event immediately
+                                                 setTimeout(() => {
+                                                     if (window.confirm("Playlist URL detected. Do you want to download the full playlist?")) {
+                                                         if (playlistCheckboxRef.current) playlistCheckboxRef.current.checked = true
+                                                     }
+                                                 }, 100)
+                                            }
+                                        }
+                                    }}
                                 />
                             </div>
                             <div className="flex items-center space-x-2">
@@ -729,6 +871,7 @@ export default function NewStory() {
                                     type="checkbox"
                                     id="downloadPlaylist"
                                     name="downloadPlaylist"
+                                    ref={playlistCheckboxRef}
                                     className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
                                 />
                                 <Label htmlFor="downloadPlaylist" className="font-normal">
@@ -797,7 +940,7 @@ export default function NewStory() {
 							disabled={isPending}
 							status={isPending ? 'pending' : 'idle'}
 						>
-							{storyType === 'audiobook' ? 'Upload & Process' : 'Download & Add'}
+							{storyType === 'audiobook' ? 'Upload & Process Files' : 'Download & Add'}
 						</StatusButton>
 					</div>
 				</Form>
