@@ -712,6 +712,8 @@ export default function NewStory() {
     const { tags } = useLoaderData<typeof loader>()
 	const isPending = useIsPending()
     const [storyType, setStoryType] = useState<'audiobook' | 'readaloud'>('audiobook')
+    const [uploadProgress, setUploadProgress] = useState<number>(0)
+    const [isUploading, setIsUploading] = useState(false)
 
 	const [form] = useForm({
 		id: 'story-editor',
@@ -719,15 +721,89 @@ export default function NewStory() {
 	})
     const playlistCheckboxRef = useRef<HTMLInputElement>(null)
 
+    const handleUpload = async (event: React.FormEvent<HTMLFormElement>) => {
+        if (storyType === 'audiobook') {
+            event.preventDefault()
+            const formData = new FormData(event.currentTarget)
+            const fileInput = document.getElementById('audiobookFile') as HTMLInputElement
+
+            if (!fileInput?.files?.length) {
+                alert('Please select at least one file')
+                return
+            }
+
+            setIsUploading(true)
+            setUploadProgress(0)
+
+            const xhr = new XMLHttpRequest()
+            xhr.open('POST', window.location.href, true)
+
+            // Track upload progress
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100
+                    setUploadProgress(Math.round(percentComplete))
+                }
+            }
+
+            xhr.onload = () => {
+                setIsUploading(false)
+                if (xhr.status >= 200 && xhr.status < 300) {
+                   // If it's a redirect (usually is), we should follow it manually or just reload
+                   // Remix actions usually return a redirect or JSON.
+                   // If redirected, xhr.responseURL might be the new URL if browser followed it.
+                   // But XHR follows redirects transparently.
+                   // If the final URL is the stories page, navigate there.
+                   if (xhr.responseURL && !xhr.responseURL.includes('stories/new')) {
+                       window.location.href = xhr.responseURL
+                   } else {
+                       // Fallback
+                       window.location.href = '/admin/stories'
+                   }
+                } else {
+                    console.error('Upload failed:', xhr.statusText)
+                    alert('Upload failed. Check console for details.')
+                }
+            }
+
+            xhr.onerror = () => {
+                setIsUploading(false)
+                console.error('XHR Error')
+                alert('Network error during upload.')
+            }
+
+            xhr.send(formData)
+        }
+        // For readaloud/youtube, just use default Remix behavior
+    }
+
 	return (
 		<div className="container mx-auto p-6">
 			<h1 className="mb-6 text-2xl font-bold">Add New Story</h1>
+
+            {isUploading && (
+                <div className="mb-6 p-4 bg-white dark:bg-slate-800 rounded-lg shadow border">
+                    <div className="flex justify-between mb-2">
+                        <span className="font-medium">Uploading...</span>
+                        <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                        <div
+                            className="bg-orange-600 h-2.5 rounded-full transition-all duration-300"
+                            style={{ width: `${uploadProgress}%` }}
+                        ></div>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">Please wait while files are being uploaded and processed.</p>
+                </div>
+            )}
+
 			<FormProvider context={form.context}>
 				<Form
 					method="POST"
 					className="flex flex-col gap-y-6"
 					{...getFormProps(form)}
 					encType="multipart/form-data"
+                    onSubmit={storyType === 'audiobook' ? handleUpload : undefined}
 				>
                     <div className="grid grid-cols-1 gap-6">
                         <div>
@@ -822,6 +898,7 @@ export default function NewStory() {
                                     <span className="text-4xl">📂</span>
                                     <span className="font-medium text-lg">Click to Upload or Drag & Drop</span>
                                     <span className="text-sm text-muted-foreground">Support for Audio (.mp3, .m4b) and Video (.mp4, .mkv, .webm)</span>
+                                    <span className="text-xs text-muted-foreground mt-1">Max file size: 5GB (Configured)</span>
                                 </div>
                             </Label>
                             <input
