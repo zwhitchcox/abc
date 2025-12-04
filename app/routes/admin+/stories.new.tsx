@@ -353,7 +353,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
 	const formData = await parseFormData(
 		request,
-		{ maxFileSize: MAX_FILE_SIZE },
+		{ maxFileSize: MAX_FILE_SIZE, maxFiles: 1000 },
 		uploadHandler
 	)
 

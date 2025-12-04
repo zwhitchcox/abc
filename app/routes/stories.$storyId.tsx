@@ -112,26 +112,32 @@ export default function StoryPlayer() {
     }, [pause])
 
     // Init Player
+    const lastStoryIdRef = useRef<string | null>(null)
     useEffect(() => {
-        if (currentStory?.id !== story.id) {
-            let startChapter = progress?.currentChapterIndex ?? 0
-            let startTime = progress?.currentTime
+        // Only run init logic if story ID has changed (mount or navigation)
+        if (lastStoryIdRef.current !== story.id) {
+            lastStoryIdRef.current = story.id
 
-            // Check if story was previously finished (Audiobook with chapters)
-            if (story.chapters.length > 0) {
-                const lastChapterIndex = story.chapters.length - 1
-                const lastChapter = story.chapters[lastChapterIndex]
-                if (startChapter === lastChapterIndex && lastChapter?.endTime && startTime && startTime >= lastChapter.endTime - 2) {
-                     startChapter = 0
-                     startTime = 0
+            if (currentStory?.id !== story.id) {
+                let startChapter = progress?.currentChapterIndex ?? 0
+                let startTime = progress?.currentTime
+
+                // Check if story was previously finished (Audiobook with chapters)
+                if (story.chapters.length > 0) {
+                    const lastChapterIndex = story.chapters.length - 1
+                    const lastChapter = story.chapters[lastChapterIndex]
+                    if (startChapter === lastChapterIndex && lastChapter?.endTime && startTime && startTime >= lastChapter.endTime - 2) {
+                        startChapter = 0
+                        startTime = 0
+                    }
                 }
-            }
 
-            play(story as any, startChapter, startTime)
-        } else if (!isPlaying) {
-            resume()
+                play(story as any, startChapter, startTime)
+            } else if (!isPlaying) {
+                resume()
+            }
         }
-    }, [story, play, currentStory, progress, seek, isPlaying, resume])
+    }, [story, play, currentStory, progress, isPlaying, resume])
 
     // Secret menu trigger
     const handleTitleClick = () => {
