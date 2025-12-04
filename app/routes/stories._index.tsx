@@ -166,7 +166,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }
     }
 
-    return json({ tags, tagStatus, globalRestriction, typeStatus })
+    const visibleTags = tags.filter(tag => tagStatus[tag.id]?.reason !== 'Disabled')
+
+    return json({ tags: visibleTags, tagStatus, globalRestriction, typeStatus })
 }
 
 function CountdownOverlay({ availableAt, reason }: { availableAt: string | null, reason?: string }) {
