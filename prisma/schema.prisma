@@ -312,6 +312,7 @@ model StoryProgress {
   currentChapterIndex Int     @default(0)
   currentTime         Float   @default(0)
   isPlaying           Boolean @default(false)
+  playCount           Int     @default(0)
 
   @@unique([userId, storyId])
   @@index([userId])

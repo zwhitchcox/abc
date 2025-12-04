@@ -9,8 +9,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	if (userId && storyId) {
 		await prisma.storyProgress.upsert({
 			where: { userId_storyId: { userId, storyId } },
-			update: { currentTime: 0, currentChapterIndex: 0, isPlaying: false },
-			create: { userId, storyId, currentTime: 0, currentChapterIndex: 0, isPlaying: false },
+			update: { currentTime: 0, currentChapterIndex: 0, isPlaying: false, playCount: { increment: 1 } },
+			create: { userId, storyId, currentTime: 0, currentChapterIndex: 0, isPlaying: false, playCount: 1 },
 		})
 	}
 

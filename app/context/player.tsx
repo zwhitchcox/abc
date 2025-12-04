@@ -199,7 +199,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
                 // If it's the last chapter, navigate back to stories
                 if (currentStory && currentChapterIndex >= currentStory.chapters.length - 1) {
-                    navigate('/stories')
+                    navigate(`/resources/reset-story/${currentStory.id}`, { replace: true })
                 }
             }
         }
@@ -255,7 +255,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     onTimeUpdate={onTimeUpdate}
                     onEnded={() => {
                         pause()
-                        navigate('/stories')
+                        navigate(`/resources/reset-story/${currentStory.id}`, { replace: true })
                     }}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
