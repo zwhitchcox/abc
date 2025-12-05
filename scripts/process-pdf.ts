@@ -15,7 +15,7 @@ async function getAudioDuration(filePath: string): Promise<number> {
       '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath
     ])
     return parseFloat(stdout)
-  } catch (e) {
+  } catch {
     return 0
   }
 }
@@ -97,7 +97,7 @@ async function main() {
   if (fs.existsSync(markersPath)) {
       try {
         markers = await fs.readJSON(markersPath)
-      } catch (e) {}
+      } catch {}
   }
 
   // Helper to save markers safely
@@ -184,7 +184,7 @@ async function main() {
                 })
               console.timeEnd('getting page text for page ' + pageNum)
 
-                let extractedText = (completion.choices[0].message.content as string || '').trim()
+                let extractedText = (completion.choices[0]?.message?.content as string || '').trim()
                 if (extractedText === 'NO_TEXT') extractedText = ''
 
                 let duration = 0
@@ -201,7 +201,7 @@ async function main() {
                         max_completion_tokens: 50,
                     })
                     console.timeEnd('getting tone analysis for page ' + pageNum)
-                    const instructions = toneAnalysis.choices[0].message.content?.trim() || 'Speak in a warm, engaging storytelling voice.'
+                    const instructions = toneAnalysis.choices[0]?.message?.content?.trim() || 'Speak in a warm, engaging storytelling voice.'
 
                     console.time('getting audio for page ' + pageNum)
                     const mp3 = await openai.audio.speech.create({

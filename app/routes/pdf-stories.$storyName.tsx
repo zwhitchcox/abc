@@ -24,7 +24,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 	const markersPath = path.join(storyDir, 'markers.json')
 	const markers: Marker[] = fs.existsSync(markersPath)
-		? JSON.parse(await fs.promises.readFile(markersPath, 'utf-8'))
+		? (JSON.parse(await fs.promises.readFile(markersPath, 'utf-8')) as Marker[])
 		: []
 
 	const imagesDir = path.join(storyDir, 'images')
@@ -50,7 +50,7 @@ export default function PdfStoryPlayer() {
 	// Initialize from URL or default to 1
 	const initialPageParam = searchParams.get('page')
 	const initialPage = initialPageParam ? parseInt(initialPageParam, 10) : 1
-	const [currentPage, setCurrentPage] = useState(1)
+	const [currentPage, setCurrentPage] = useState(initialPage)
 	const [totalPages, setTotalPages] = useState(1)
 	const [hasRestoredProgress, setHasRestoredProgress] = useState(false)
 
@@ -92,8 +92,6 @@ export default function PdfStoryPlayer() {
 	const [isPlaying, setIsPlaying] = useState(false)
 	const [showControls, setShowControls] = useState(true)
 	const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right')
-
-	if (!data) return null // Safety check
 
 	const { storyName, title, markers } = data
 
@@ -146,7 +144,7 @@ export default function PdfStoryPlayer() {
 			if (hasAudio) {
 				const playPromise = audioRef.current.play()
 				if (playPromise !== undefined) {
-					playPromise.catch(() => {
+					void playPromise.catch(() => {
 						setIsPlaying(false)
 					})
 				}
@@ -264,7 +262,7 @@ export default function PdfStoryPlayer() {
 										audioRef.current.pause()
 										setIsPlaying(false)
 									} else {
-										audioRef.current.play()
+										void audioRef.current.play()
 										setIsPlaying(true)
 									}
 								}

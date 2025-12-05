@@ -19,7 +19,7 @@ async function ensureYtDlp() {
         try {
              console.log('Checking for yt-dlp updates...')
              execSync(`${binaryPath} -U`, { stdio: 'inherit' })
-        } catch (e) {
+        } catch {
             console.warn('Failed to update yt-dlp, continuing with existing version')
         }
     }

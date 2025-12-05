@@ -1,9 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { type FileUpload, parseFormData } from '@mjackson/form-data-parser'
-import { json, redirect, type ActionFunctionArgs } from '@remix-run/node'
+import { json, type ActionFunctionArgs } from '@remix-run/node'
 import { Form, useActionData, useNavigation } from '@remix-run/react'
-import { Button } from '#app/components/ui/button.tsx'
 import { Label } from '#app/components/ui/label.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { requireUserWithRole } from '#app/utils/permissions.server.ts'
@@ -35,7 +34,7 @@ export async function action({ request }: ActionFunctionArgs) {
     try {
         await parseFormData(request, { maxFileSize: 1024 * 1024 * 5 }, uploadHandler)
         return json({ success: true, error: null })
-    } catch (e) {
+    } catch {
         return json({ success: false, error: 'Upload failed' }, { status: 400 })
     }
 }

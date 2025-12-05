@@ -1,13 +1,13 @@
-import { json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from '@remix-run/node'
+import { json, type ActionFunctionArgs, type LoaderFunctionArgs } from '@remix-run/node'
 import { Form, useLoaderData, useNavigation, Link } from '@remix-run/react'
-import { prisma } from '#app/utils/db.server.ts'
-import { requireUserWithRole } from '#app/utils/permissions.server.ts'
 import { Button } from '#app/components/ui/button.tsx'
+import { Checkbox } from '#app/components/ui/checkbox.tsx'
+import { Icon } from '#app/components/ui/icon.tsx'
 import { Input } from '#app/components/ui/input.tsx'
 import { Label } from '#app/components/ui/label.tsx'
-import { Icon } from '#app/components/ui/icon.tsx'
-import { Checkbox } from '#app/components/ui/checkbox.tsx'
+import { prisma } from '#app/utils/db.server.ts'
 import { cn } from '#app/utils/misc.tsx'
+import { requireUserWithRole } from '#app/utils/permissions.server.ts'
 
 export async function loader({ request }: LoaderFunctionArgs) {
     await requireUserWithRole(request, 'admin')

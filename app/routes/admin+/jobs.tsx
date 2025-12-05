@@ -1,7 +1,6 @@
 import { json, type LoaderFunctionArgs } from '@remix-run/node'
 import { Link, useLoaderData, useRevalidator } from '@remix-run/react'
 import { useEffect } from 'react'
-import { Icon } from '#app/components/ui/icon.tsx'
 import { prisma } from '#app/utils/db.server.ts'
 import { cn } from '#app/utils/misc.tsx'
 import { requireUserWithRole } from '#app/utils/permissions.server.ts'

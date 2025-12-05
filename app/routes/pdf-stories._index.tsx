@@ -1,9 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { json, type LoaderFunctionArgs } from '@remix-run/node'
+import { json } from '@remix-run/node'
 import { Link, useLoaderData } from '@remix-run/react'
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader() {
 	const pdfDir = path.join(process.cwd(), 'data', 'processed-pdfs')
 
 	if (!fs.existsSync(pdfDir)) {

@@ -7,8 +7,8 @@ import { Input } from '#app/components/ui/input.tsx'
 import { Label } from '#app/components/ui/label.tsx'
 import { ThemeSwitch, useOptionalTheme } from '#app/routes/resources+/theme-switch.tsx'
 import { requireUserId } from '#app/utils/auth.server.ts'
-import { requireUserWithRole } from '#app/utils/permissions.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
+import { requireUserWithRole } from '#app/utils/permissions.server.ts'
 
 const TIMEZONES = [
   "UTC",
