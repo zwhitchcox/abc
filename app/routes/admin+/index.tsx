@@ -232,15 +232,24 @@ export default function AdminDashboard() {
                 <div className="lg:col-span-2 space-y-6">
                     <h2 className="text-xl font-bold text-stone-800 dark:text-stone-100">Quick Actions</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                         <Link to="/admin/stories/new" className="group p-8 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all flex flex-col items-center justify-center text-center">
-                            <div className="p-3 bg-white/20 rounded-full mb-4 group-hover:scale-110 transition-transform">
-                                <Icon name="plus" className="h-8 w-8" />
-                            </div>
-                            <span className="text-lg font-bold">Upload New Story</span>
-                            <span className="text-sm text-white/80 mt-1">Add audiobook or video</span>
-                         </Link>
+                         <div className="flex flex-col gap-4">
+                             <Link to="/admin/stories/new" className="flex-1 group p-6 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all flex flex-col items-center justify-center text-center min-h-[160px]">
+                                <div className="p-3 bg-white/20 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                                    <Icon name="plus" className="h-6 w-6" />
+                                </div>
+                                <span className="text-lg font-bold">Upload Story</span>
+                                <span className="text-sm text-white/80">Audiobook / Video</span>
+                             </Link>
+                             <Link to="/admin/pdf-stories/new" className="flex-1 group p-6 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all flex flex-col items-center justify-center text-center min-h-[160px]">
+                                <div className="p-3 bg-white/20 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                                    <Icon name="file-text" className="h-6 w-6" />
+                                </div>
+                                <span className="text-lg font-bold">Upload PDF</span>
+                                <span className="text-sm text-white/80">Process Book PDF</span>
+                             </Link>
+                         </div>
 
-                                 <div className="grid grid-rows-3 gap-4">
+                         <div className="grid grid-rows-4 gap-4">
                                      <Link to="/admin/parent" className="group p-6 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 hover:border-green-500 dark:hover:border-green-500 hover:shadow-md rounded-2xl transition-all flex items-center gap-4">
                                         <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-full">
                                             <Icon name="lock-closed" className="h-6 w-6" />
@@ -266,6 +275,15 @@ export default function AdminDashboard() {
                                 <div className="text-left">
                                     <span className="block font-bold text-stone-800 dark:text-stone-100">Manage Stories</span>
                                     <span className="text-xs text-muted-foreground">Edit & Delete</span>
+                                </div>
+                             </Link>
+                             <Link to="/admin/pdf-stories" className="group p-6 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 hover:border-purple-500 dark:hover:border-purple-500 hover:shadow-md rounded-2xl transition-all flex items-center gap-4">
+                                <div className="p-3 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-full">
+                                    <Icon name="book-open" className="h-6 w-6" />
+                                </div>
+                                <div className="text-left">
+                                    <span className="block font-bold text-stone-800 dark:text-stone-100">Manage PDFs</span>
+                                    <span className="text-xs text-muted-foreground">Delete & View</span>
                                 </div>
                              </Link>
                          </div>

@@ -341,6 +341,21 @@ export default function StoriesIndex() {
                 My Library
             </h1>
 
+            <div className="mb-12 flex justify-center">
+                <Link to="/pdf-stories" className="bg-white dark:bg-stone-900 border-4 border-blue-400 rounded-3xl p-6 shadow-xl hover:scale-105 hover:rotate-1 transition-transform flex items-center gap-6 max-w-md w-full mx-4">
+                    <div className="p-4 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full shrink-0">
+                        <Icon name="book-open" className="h-10 w-10" />
+                    </div>
+                    <div className="text-left">
+                        <h2 className="text-2xl font-bold text-stone-800 dark:text-stone-100">Picture Books</h2>
+                        <p className="text-stone-500 dark:text-stone-400 font-medium">Read & Listen to Books</p>
+                    </div>
+                    <div className="ml-auto">
+                        <Icon name="arrow-right" className="h-6 w-6 text-stone-400" />
+                    </div>
+                </Link>
+            </div>
+
             <div className="space-y-12">
                 {/* Tags Sections */}
                 {tags.map(tag => {
