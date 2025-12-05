@@ -36,8 +36,48 @@ async function main() {
   }
 
   const filename = path.basename(pdfPath, path.extname(pdfPath))
-  const outputDir = path.join(process.cwd(), 'data', 'processed-pdfs', filename)
-  await fs.ensureDir(outputDir)
+  const baseDir = path.join(process.cwd(), 'data', 'processed-pdfs')
+  await fs.ensureDir(baseDir)
+
+  console.log(`Processing ${pdfPath}...`)
+
+  // Generate clean title and folder name
+  let cleanTitle = filename.replace(/-/g, ' ').replace(/\d+/g, '').trim()
+  let folderName = filename
+
+  console.log('Generating clean title...')
+  try {
+    const titleResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{
+        role: 'user',
+        content: `Clean up this PDF filename into a proper book title. Remove any numbers, IDs, file extensions, or artifacts. Just output the clean title, nothing else.\n\nFilename: "${filename}"`,
+      }],
+      max_tokens: 100,
+    })
+    const aiTitle = titleResponse.choices[0]?.message?.content?.trim()
+    if (aiTitle) {
+      cleanTitle = aiTitle
+      folderName = aiTitle.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-')
+    }
+    console.log(`Title: ${cleanTitle}`)
+  } catch {
+    console.error('Failed to generate clean title, using filename')
+    folderName = filename
+  }
+
+  // Check if folder already exists (either with old name or new name)
+  let outputDir = path.join(baseDir, folderName)
+  const oldOutputDir = path.join(baseDir, filename)
+
+  if (fs.existsSync(oldOutputDir) && !fs.existsSync(outputDir)) {
+    console.log(`Renaming folder from "${filename}" to "${folderName}"`)
+    await fs.rename(oldOutputDir, outputDir)
+  } else if (fs.existsSync(outputDir)) {
+    console.log(`Using existing folder: ${folderName}`)
+  } else {
+    await fs.ensureDir(outputDir)
+  }
 
   const imagesDir = path.join(outputDir, 'images')
   await fs.ensureDir(imagesDir)
@@ -46,8 +86,12 @@ async function main() {
   const textDir = path.join(outputDir, 'text')
   await fs.ensureDir(textDir)
 
-  console.log(`Processing ${pdfPath}...`)
   console.log(`Output directory: ${outputDir}`)
+
+  // Save metadata
+  const metadataPath = path.join(outputDir, 'metadata.json')
+  const metadata = { title: cleanTitle }
+  await fs.writeJSON(metadataPath, metadata, { spaces: 2 })
 
   // 1. Convert PDF to Images (if needed)
   const existingImages = await fs.readdir(imagesDir).catch(() => [])
@@ -175,7 +219,7 @@ async function main() {
                     messages: [{
                         role: 'user',
                         content: [
-                            { type: 'text', text: 'Extract all text from this book page that is part of the book content (Title, Author, Story Text, Illustrations Captions). Only exclude technical metadata (ISBN, copyright blocks, barcodes, publication info). If there is absolutely no readable text related to the book content, respond "NO_TEXT". Output only the extracted text.' },
+                            { type: 'text', text: 'Extract all text from this book page that is part of the book content (Title, Author, Story Text, Illustrations Captions). Exclude technical metadata (ISBN, copyright blocks, barcodes, publication info, price, release date) AND introductory letters to parents, reading level descriptions, promotional material, or "About the Author" sections. If there is absolutely no readable text related to the book content, respond "NO_TEXT". Output only the extracted text.' },
                             ...imageContents,
                         ],
                     }],

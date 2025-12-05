@@ -16,9 +16,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
         .filter(d => d.isDirectory())
         .map(async d => {
             const stats = await fs.stat(path.join(pdfDir, d.name))
+            const metadataPath = path.join(pdfDir, d.name, 'metadata.json')
+            let title = d.name.replace(/-/g, ' ')
+            try {
+                if (await fs.pathExists(metadataPath)) {
+                    const metadata = await fs.readJSON(metadataPath)
+                    if (metadata.title) title = metadata.title
+                }
+            } catch {}
             return {
                 name: d.name,
-                title: d.name.replace(/-/g, ' '),
+                title,
                 createdAt: stats.birthtime
             }
         }))

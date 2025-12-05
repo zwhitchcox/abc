@@ -212,10 +212,11 @@ function App() {
 	const isFullScreen =
 		fullScreenRoutes[location.pathname as keyof typeof fullScreenRoutes] ||
         location.pathname.startsWith('/stories') ||
+        location.pathname.startsWith('/pdf-stories') ||
         location.pathname === '/timeout'
 
     // Hide sidebar trigger specifically for stories/timeout routes
-    const isStoriesOrTimeout = location.pathname.startsWith('/stories') || location.pathname === '/timeout'
+    const isStoriesOrTimeout = location.pathname.startsWith('/stories') || location.pathname.startsWith('/pdf-stories') || location.pathname === '/timeout'
     const showSidebarTrigger = !isStoriesOrTimeout
 
 	return (

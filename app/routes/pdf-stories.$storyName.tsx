@@ -34,9 +34,19 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 	const totalPages = imageFiles.length
 
+	// Get clean title from metadata
+	const metadataPath = path.join(storyDir, 'metadata.json')
+	let title = storyName.replace(/-/g, ' ')
+	try {
+		if (fs.existsSync(metadataPath)) {
+			const metadata = JSON.parse(await fs.promises.readFile(metadataPath, 'utf-8'))
+			if (metadata.title) title = metadata.title
+		}
+	} catch {}
+
 	return json({
 		storyName,
-		title: storyName.replace(/-/g, ' '),
+		title,
 		markers,
 		totalPages,
 	})

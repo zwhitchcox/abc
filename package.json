@@ -87,7 +87,7 @@
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.5",
-    "execa": "^9.4.1",
+    "execa": "^8.0.1",
     "express": "^4.21.1",
     "express-rate-limit": "^7.4.1",
     "ffprobe": "^1.1.2",

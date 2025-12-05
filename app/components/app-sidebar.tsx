@@ -27,6 +27,11 @@ const items = [
 		icon: BookOpen,
 	},
 	{
+		title: 'Picture Books',
+		url: '/pdf-stories',
+		icon: BookOpen,
+	},
+	{
 		title: 'Audiobooks',
 		url: '/stories',
 		icon: Headphones,

@@ -24,6 +24,7 @@
           - rsync
           - acl
           - unzip
+          - poppler-utils
         state: present
 
     - name: Add NodeSource repository

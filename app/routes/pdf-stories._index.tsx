@@ -11,12 +11,21 @@ export async function loader() {
 	}
 
 	const dirs = await fs.promises.readdir(pdfDir, { withFileTypes: true })
-	const stories = dirs
-		.filter(d => d.isDirectory())
-		.map(d => ({
-			name: d.name,
-			title: d.name.replace(/-/g, ' '),
-		}))
+	const stories = await Promise.all(
+		dirs
+			.filter(d => d.isDirectory())
+			.map(async d => {
+				const metadataPath = path.join(pdfDir, d.name, 'metadata.json')
+				let title = d.name.replace(/-/g, ' ')
+				try {
+					if (fs.existsSync(metadataPath)) {
+						const metadata = JSON.parse(await fs.promises.readFile(metadataPath, 'utf-8'))
+						if (metadata.title) title = metadata.title
+					}
+				} catch {}
+				return { name: d.name, title }
+			})
+	)
 
 	return json({ stories })
 }
