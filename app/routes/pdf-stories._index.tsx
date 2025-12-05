@@ -19,7 +19,7 @@ export async function loader() {
 				let title = d.name.replace(/-/g, ' ')
 				try {
 					if (fs.existsSync(metadataPath)) {
-						const metadata = JSON.parse(await fs.promises.readFile(metadataPath, 'utf-8'))
+						const metadata = JSON.parse(await fs.promises.readFile(metadataPath, 'utf-8')) as { title?: string }
 						if (metadata.title) title = metadata.title
 					}
 				} catch {}
