@@ -60,7 +60,8 @@ export async function action({ request }: ActionFunctionArgs) {
         execa('npm', ['run', 'process-pdf', filePath], {
             detached: true,
             stdio: 'inherit',
-            cwd: process.cwd()
+            cwd: process.cwd(),
+            env: process.env,
         }).unref()
     }
 
