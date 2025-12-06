@@ -220,7 +220,7 @@ async function main() {
                     messages: [{
                         role: 'user',
                         content: [
-                            { type: 'text', text: 'Extract all text from this book page that is part of the book content (Title, Author, Story Text, Illustrations Captions). Exclude technical metadata (ISBN, copyright blocks, barcodes, publication info, price, release date) AND introductory letters to parents, reading level descriptions, promotional material, or "About the Author" sections. If there is absolutely no readable text related to the book content, respond "NO_TEXT". Output only the extracted text.' },
+                            { type: 'text', text: 'Extract the main body text from this book page. EXCLUDE: page headers (chapter titles/names repeated at the top of every page), page numbers, running headers, technical metadata (ISBN, copyright, barcodes, publication info, price), introductory letters, reading level descriptions, promotional material, "About the Author" sections. INCLUDE ONLY: the actual story/content text in the body of the page. If there is no body text, respond "NO_TEXT". Output only the extracted text.' },
                             ...imageContents,
                         ],
                     }],

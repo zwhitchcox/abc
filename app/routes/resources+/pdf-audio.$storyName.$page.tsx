@@ -7,10 +7,19 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 	const { storyName, page } = params
 	invariantResponse(storyName && page, 'Story name and page are required', { status: 400 })
 
-	const pageNum = parseInt(page, 10)
-	const audioPath = path.join(process.cwd(), 'data', 'processed-pdfs', storyName, 'audio', `page-${pageNum}.mp3`)
+	const audioDir = path.join(process.cwd(), 'data', 'processed-pdfs', storyName, 'audio')
+	const paddings = [0, 2, 3, 4]
+	let audioPath = ''
+	for (const pad of paddings) {
+		const filename = pad === 0 ? `page-${page}.mp3` : `page-${page.padStart(pad, '0')}.mp3`
+		const tryPath = path.join(audioDir, filename)
+		if (fs.existsSync(tryPath)) {
+			audioPath = tryPath
+			break
+		}
+	}
 
-	if (!fs.existsSync(audioPath)) {
+	if (!audioPath) {
 		throw new Response('Audio not found', { status: 404 })
 	}
 

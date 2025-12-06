@@ -7,9 +7,18 @@ export async function loader({ params }: LoaderFunctionArgs) {
 	const { storyName, page } = params
 	invariantResponse(storyName && page, 'Story name and page are required', { status: 400 })
 
-	const imagePath = path.join(process.cwd(), 'data', 'processed-pdfs', storyName, 'images', `page-${page.padStart(2, '0')}.jpg`)
+	const imagesDir = path.join(process.cwd(), 'data', 'processed-pdfs', storyName, 'images')
+	const paddings = [2, 3, 4]
+	let imagePath = ''
+	for (const pad of paddings) {
+		const tryPath = path.join(imagesDir, `page-${page.padStart(pad, '0')}.jpg`)
+		if (fs.existsSync(tryPath)) {
+			imagePath = tryPath
+			break
+		}
+	}
 
-	if (!fs.existsSync(imagePath)) {
+	if (!imagePath) {
 		throw new Response('Image not found', { status: 404 })
 	}
 
