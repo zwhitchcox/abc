@@ -117,10 +117,11 @@ export default function PdfStoryPlayer() {
 	}, [currentPage, setSearchParams])
 
 	const goToPage = useCallback((page: number) => {
-		if (page >= 1 && page <= totalPages) {
-			setSlideDirection(page > currentPage ? 'right' : 'left')
-			setCurrentPage(page)
-		}
+		let targetPage = page
+		if (page > totalPages) targetPage = 1
+		else if (page < 1) targetPage = totalPages
+		setSlideDirection(page > currentPage ? 'right' : 'left')
+		setCurrentPage(targetPage)
 	}, [currentPage, totalPages])
 
 	const toggleControls = useCallback(() => {
@@ -256,8 +257,7 @@ export default function PdfStoryPlayer() {
 					<div className="flex items-center justify-center gap-8">
 						<button
 							onClick={(e) => { e.stopPropagation(); goToPage(currentPage - 1); }}
-							disabled={currentPage === 1}
-							className="p-3 rounded-full hover:bg-white/10 disabled:opacity-30 transition-colors"
+							className="p-3 rounded-full hover:bg-white/10 transition-colors"
 						>
 							<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -292,8 +292,7 @@ export default function PdfStoryPlayer() {
 
 						<button
 							onClick={(e) => { e.stopPropagation(); goToPage(currentPage + 1); }}
-							disabled={currentPage === totalPages}
-							className="p-3 rounded-full hover:bg-white/10 disabled:opacity-30 transition-colors"
+							className="p-3 rounded-full hover:bg-white/10 transition-colors"
 						>
 							<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
