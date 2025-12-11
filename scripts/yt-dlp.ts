@@ -8,13 +8,13 @@ import YtDlpWrapImport from 'yt-dlp-wrap'
 const YtDlpWrap = (YtDlpWrapImport as any).default ?? YtDlpWrapImport
 
 async function ensureYtDlp() {
-    const binaryPath = path.join(process.cwd(), 'bin', 'yt-dlp')
+        const binaryPath = path.join(process.cwd(), 'bin', 'yt-dlp')
 
-    if (!fs.existsSync(binaryPath)) {
-        console.log('Downloading yt-dlp binary to', binaryPath)
-        await fs.promises.mkdir(path.dirname(binaryPath), { recursive: true })
-        await YtDlpWrap.downloadFromGithub(binaryPath)
-        await fs.promises.chmod(binaryPath, '755')
+        if (!fs.existsSync(binaryPath)) {
+            console.log('Downloading yt-dlp binary to', binaryPath)
+            await fs.promises.mkdir(path.dirname(binaryPath), { recursive: true })
+            await YtDlpWrap.downloadFromGithub(binaryPath)
+            await fs.promises.chmod(binaryPath, '755')
     } else {
         try {
              console.log('Checking for yt-dlp updates...')
@@ -22,8 +22,8 @@ async function ensureYtDlp() {
         } catch {
             console.warn('Failed to update yt-dlp, continuing with existing version')
         }
-    }
-    return binaryPath
+        }
+        return binaryPath
 }
 
 function askQuestion(query: string): Promise<string> {

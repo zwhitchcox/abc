@@ -118,21 +118,21 @@ export default function StoryPlayer() {
         if (lastStoryIdRef.current !== story.id) {
             lastStoryIdRef.current = story.id
 
-            if (currentStory?.id !== story.id) {
-                let startChapter = progress?.currentChapterIndex ?? 0
-                let startTime = progress?.currentTime
+        if (currentStory?.id !== story.id) {
+            let startChapter = progress?.currentChapterIndex ?? 0
+            let startTime = progress?.currentTime
 
-                // Check if story was previously finished (Audiobook with chapters)
-                if (story.chapters.length > 0) {
-                    const lastChapterIndex = story.chapters.length - 1
-                    const lastChapter = story.chapters[lastChapterIndex]
-                    if (startChapter === lastChapterIndex && lastChapter?.endTime && startTime && startTime >= lastChapter.endTime - 2) {
-                        startChapter = 0
-                        startTime = 0
-                    }
+            // Check if story was previously finished (Audiobook with chapters)
+            if (story.chapters.length > 0) {
+                const lastChapterIndex = story.chapters.length - 1
+                const lastChapter = story.chapters[lastChapterIndex]
+                if (startChapter === lastChapterIndex && lastChapter?.endTime && startTime && startTime >= lastChapter.endTime - 2) {
+                     startChapter = 0
+                     startTime = 0
                 }
+            }
 
-                play(story as any, startChapter, startTime)
+            play(story as any, startChapter, startTime)
             } else if (!isPlaying) {
                 resume()
             }

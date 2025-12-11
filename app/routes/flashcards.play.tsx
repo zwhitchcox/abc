@@ -1,7 +1,7 @@
 import { readdir } from "fs/promises";
 import { join } from "path";
-import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { json, type LoaderFunctionArgs } from "@remix-run/node";
+import { useLoaderData, useNavigate } from "@remix-run/react";
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "#app/components/ui/button";
 import {
@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "#app/components/ui/card";
 import { Checkbox } from "#app/components/ui/checkbox";
+import { Icon } from "#app/components/ui/icon";
 
 type FlashcardItem = {
   topic: string;
@@ -18,7 +19,10 @@ type FlashcardItem = {
   imagePath: string;
 };
 
-export async function loader() {
+export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const topicParam = url.searchParams.get('topic') || 'all';
+
   const flashcards: FlashcardItem[] = [];
   const imagesDir = process.env.IMAGES_DIR || (
     process.env.NODE_ENV === "production" ? "/data/images" : "./images"
@@ -29,13 +33,18 @@ export async function loader() {
 
     for (const topic of topics) {
       if (topic.startsWith('.')) continue;
-      
+
+      // Filter by topic if specified
+      if (topicParam !== 'all' && topic.toLowerCase() !== topicParam.toLowerCase()) {
+        continue;
+      }
+
       const topicPath = join(imagesDir, topic);
       const items = await readdir(topicPath);
 
       for (const item of items) {
         if (item.startsWith('.')) continue;
-        
+
         const itemPath = join(topicPath, item);
         try {
           const images = await readdir(itemPath);
@@ -62,11 +71,12 @@ export async function loader() {
     console.error("Error loading flashcards:", error);
   }
 
-  return json({ flashcards });
+  return json({ flashcards, topicParam });
 }
 
 export default function Flashcards() {
-  const { flashcards } = useLoaderData<typeof loader>();
+  const { flashcards, topicParam } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showName, setShowName] = useState(false);
   const [autoShowName, setAutoShowName] = useState(() => {
@@ -88,44 +98,23 @@ export default function Flashcards() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
-  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("flashcards-selected-topics");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            return new Set(parsed as string[]);
-          }
-        } catch {
-          // If parsing fails, use default
-        }
-      }
-    }
-    return new Set(["animals"]);
-  });
 
-  // Get unique topics
-  const allTopics = Array.from(new Set(flashcards.map((card) => card.topic)));
-
-  // Filter flashcards based on selected topics
-  const filteredFlashcards = flashcards.filter((card) =>
-    selectedTopics.has(card.topic),
-  );
+  // We don't need selectedTopics state anymore as it's handled by loader filtering
+  // But we might want to keep the modal for options like auto-show name
 
   const getNextIndex = useCallback((): number => {
-    const availableIndices = filteredFlashcards
+    const availableIndices = flashcards
       .map((_, index) => index)
       .filter((index) => !usedIndices.includes(index));
 
     if (availableIndices.length === 0) {
       setUsedIndices([]);
-      return Math.floor(Math.random() * filteredFlashcards.length);
+      return Math.floor(Math.random() * flashcards.length);
     }
 
     const randomIndex = Math.floor(Math.random() * availableIndices.length);
     return availableIndices[randomIndex] ?? 0;
-  }, [filteredFlashcards, usedIndices]);
+  }, [flashcards, usedIndices]);
 
   const nextCard = useCallback(() => {
     const newIndex = getNextIndex();
@@ -137,8 +126,12 @@ export default function Flashcards() {
 
   const handleKeyPress = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isModalOpen) {
-        setIsModalOpen(false);
+      if (e.key === "Escape") {
+        if (isModalOpen) {
+          setIsModalOpen(false);
+        } else {
+          navigate('/flashcards'); // Go back to topics list
+        }
         return;
       }
       if (isModalOpen) return;
@@ -153,7 +146,7 @@ export default function Flashcards() {
         }
       }
     },
-    [showName, autoShowName, nextCard, isModalOpen, isSpacePressed],
+    [showName, autoShowName, nextCard, isModalOpen, isSpacePressed, navigate],
   );
 
   const handleKeyUp = useCallback(
@@ -190,45 +183,25 @@ export default function Flashcards() {
 
   // Speak the name when it's shown
   useEffect(() => {
-    if (showName && speakName && filteredFlashcards[currentIndex]) {
-      const name = filteredFlashcards[currentIndex].item
+    if (showName && speakName && flashcards[currentIndex]) {
+      const name = flashcards[currentIndex].item
         .split("-")
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
-      
+
       if ('speechSynthesis' in window) {
         // Cancel any ongoing speech
         window.speechSynthesis.cancel();
-        
+
         const utterance = new SpeechSynthesisUtterance(name);
         utterance.rate = 0.9; // Slightly slower for clarity
         utterance.pitch = 1;
         utterance.volume = 1;
-        
+
         window.speechSynthesis.speak(utterance);
       }
     }
-  }, [showName, speakName, currentIndex, filteredFlashcards]);
-
-  // Reset when topics change (but not on initial mount)
-  useEffect(() => {
-    if (isInitialized && filteredFlashcards.length > 0) {
-      const randomIndex = Math.floor(Math.random() * filteredFlashcards.length);
-      setCurrentIndex(randomIndex);
-      setUsedIndices([randomIndex]);
-      setShowName(autoShowName);
-    }
-  }, [selectedTopics, isInitialized, filteredFlashcards.length, autoShowName]);
-
-  // Save selected topics to localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(
-        "flashcards-selected-topics",
-        JSON.stringify(Array.from(selectedTopics)),
-      );
-    }
-  }, [selectedTopics]);
+  }, [showName, speakName, currentIndex, flashcards]);
 
   // Save auto show name preference
   useEffect(() => {
@@ -246,22 +219,27 @@ export default function Flashcards() {
 
   // Initialize with random card on mount
   useEffect(() => {
-    if (!isInitialized && filteredFlashcards.length > 0) {
-      const randomIndex = Math.floor(Math.random() * filteredFlashcards.length);
+    if (!isInitialized && flashcards.length > 0) {
+      const randomIndex = Math.floor(Math.random() * flashcards.length);
       setCurrentIndex(randomIndex);
       setUsedIndices([randomIndex]);
       setIsInitialized(true);
     }
-  }, [isInitialized, filteredFlashcards.length]);
+  }, [isInitialized, flashcards.length]);
 
   if (flashcards.length === 0) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Card className="p-8 text-center">
+        <Card className="p-8 text-center max-w-md mx-auto">
           <h2 className="text-2xl font-bold mb-4">No Images Found</h2>
-          <p className="text-muted-foreground">
-            Please run `pnpm sync-images` to download and upload images.
+          <p className="text-muted-foreground mb-6">
+            {topicParam !== 'all'
+              ? `No images found for topic "${topicParam}".`
+              : "No flashcards available."}
           </p>
+          <Button onClick={() => navigate('/flashcards')}>
+            Back to Topics
+          </Button>
         </Card>
       </div>
     );
@@ -269,117 +247,7 @@ export default function Flashcards() {
 
   const toggleModal = () => setIsModalOpen((prev) => !prev);
 
-  if (filteredFlashcards.length === 0) {
-    return (
-      <div className="relative h-full touch-manipulation select-none">
-        <Button
-          onClick={toggleModal}
-          className="absolute right-5 top-5 z-10 px-4 py-2 text-lg"
-        >
-          Options
-        </Button>
-
-        {isModalOpen && (
-          <div
-            onClick={toggleModal}
-            className="fixed inset-0 z-20 flex items-center justify-center bg-black/50"
-          >
-            <Card
-              onClick={(e) => e.stopPropagation()}
-              className="max-h-[90vh] max-w-3xl overflow-y-auto"
-            >
-              <CardHeader className="flex items-center justify-between">
-                <CardTitle>Options</CardTitle>
-                <Button onClick={toggleModal} variant="ghost">
-                  Close
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="font-semibold mb-3">Categories</h3>
-                    <div className="space-y-2">
-                      {allTopics.map((topic) => (
-                        <div key={topic} className="flex items-center gap-2">
-                          <Checkbox
-                            id={`topic-${topic}`}
-                            checked={selectedTopics.has(topic)}
-                            onCheckedChange={(checked) => {
-                              const newTopics = new Set(selectedTopics);
-                              if (checked) {
-                                newTopics.add(topic);
-                              } else {
-                                newTopics.delete(topic);
-                              }
-                              setSelectedTopics(newTopics);
-                            }}
-                          />
-                          <label
-                            htmlFor={`topic-${topic}`}
-                            className="cursor-pointer capitalize"
-                          >
-                            {topic}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold mb-3">Display Options</h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id="auto-show"
-                          checked={autoShowName}
-                          onCheckedChange={(checked) =>
-                            setAutoShowName(checked as boolean)
-                          }
-                        />
-                        <label htmlFor="auto-show" className="cursor-pointer">
-                          Always show name
-                        </label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id="speak-name"
-                          checked={speakName}
-                          onCheckedChange={(checked) =>
-                            setSpeakName(checked as boolean)
-                          }
-                        />
-                        <label htmlFor="speak-name" className="cursor-pointer">
-                          Speak name when shown
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-sm text-muted-foreground">
-                    Cards shown: {usedIndices.length} of{" "}
-                    {filteredFlashcards.length}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        <div className="h-full flex items-center justify-center">
-          <Card className="p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">
-              No Images in Selected Categories
-            </h2>
-            <p className="text-muted-foreground">
-              Please select at least one category in the options.
-            </p>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  const currentCard = filteredFlashcards[currentIndex];
+  const currentCard = flashcards[currentIndex];
   const formattedName = currentCard
     ? currentCard.item
         .split("-")
@@ -389,6 +257,13 @@ export default function Flashcards() {
 
   return (
     <div className="relative h-full touch-manipulation select-none">
+      <div className="absolute top-5 left-5 z-10">
+        <Button variant="ghost" onClick={() => navigate('/flashcards')} className="gap-2">
+          <Icon name="arrow-left" className="w-4 h-4" />
+          Topics
+        </Button>
+      </div>
+
       <Button
         onClick={toggleModal}
         className="absolute right-5 top-5 z-10 px-4 py-2 text-lg"
@@ -403,45 +278,16 @@ export default function Flashcards() {
         >
           <Card
             onClick={(e) => e.stopPropagation()}
-            className="max-h-[90vh] max-w-3xl overflow-y-auto"
+            className="max-h-[90vh] max-w-md w-full overflow-y-auto"
           >
-            <CardHeader className="flex items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Options</CardTitle>
-              <Button onClick={toggleModal} variant="ghost">
-                Close
+              <Button onClick={toggleModal} variant="ghost" size="sm">
+                <Icon name="cross-1" className="w-4 h-4" />
               </Button>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                <div>
-                  <h3 className="font-semibold mb-3">Categories</h3>
-                  <div className="space-y-2">
-                    {allTopics.map((topic) => (
-                      <div key={topic} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`topic-${topic}`}
-                          checked={selectedTopics.has(topic)}
-                          onCheckedChange={(checked) => {
-                            const newTopics = new Set(selectedTopics);
-                            if (checked) {
-                              newTopics.add(topic);
-                            } else {
-                              newTopics.delete(topic);
-                            }
-                            setSelectedTopics(newTopics);
-                          }}
-                        />
-                        <label
-                          htmlFor={`topic-${topic}`}
-                          className="cursor-pointer capitalize"
-                        >
-                          {topic}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
                 <div>
                   <h3 className="font-semibold mb-3">Display Options</h3>
                   <div className="space-y-3">
@@ -474,7 +320,7 @@ export default function Flashcards() {
 
                 <p className="text-sm text-muted-foreground">
                   Cards shown: {usedIndices.length} of{" "}
-                  {filteredFlashcards.length}
+                  {flashcards.length}
                 </p>
               </div>
             </CardContent>

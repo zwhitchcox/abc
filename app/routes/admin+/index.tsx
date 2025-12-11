@@ -249,7 +249,7 @@ export default function AdminDashboard() {
                              </Link>
                          </div>
 
-                         <div className="grid grid-rows-4 gap-4">
+                         <div className="grid grid-rows-5 gap-4">
                                      <Link to="/admin/parent" className="group p-6 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 hover:border-green-500 dark:hover:border-green-500 hover:shadow-md rounded-2xl transition-all flex items-center gap-4">
                                         <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-full">
                                             <Icon name="lock-closed" className="h-6 w-6" />
@@ -284,6 +284,15 @@ export default function AdminDashboard() {
                                 <div className="text-left">
                                     <span className="block font-bold text-stone-800 dark:text-stone-100">Manage PDFs</span>
                                     <span className="text-xs text-muted-foreground">Delete & View</span>
+                                </div>
+                             </Link>
+                             <Link to="/admin/flashcards" className="group p-6 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 hover:border-amber-500 dark:hover:border-amber-500 hover:shadow-md rounded-2xl transition-all flex items-center gap-4">
+                                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full">
+                                    <Icon name="camera" className="h-6 w-6" />
+                                </div>
+                                <div className="text-left">
+                                    <span className="block font-bold text-stone-800 dark:text-stone-100">Flashcards</span>
+                                    <span className="text-xs text-muted-foreground">Topics & Images</span>
                                 </div>
                              </Link>
                          </div>

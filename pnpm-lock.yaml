@@ -265,8 +265,8 @@ importers:
         specifier: ^2.22.6
         version: 2.22.6
       '@sly-cli/sly':
-        specifier: ^1.14.0
-        version: 1.14.0(typescript@5.6.3)
+        specifier: ^2.1.1
+        version: 2.1.1(typescript@5.6.3)
       '@testing-library/dom':
         specifier: ^10.4.0
         version: 10.4.0
@@ -2563,8 +2563,8 @@ packages:
     resolution: {integrity: sha512-zIieP1VLWQb3wUjFJlwOAoaaJygJhXeUoGd0e/Ha2RLb2eW2S+4gjf6y6NqyY71tZ74LYVZKg/4prB6FAZSMXQ==}
     engines: {node: '>= 14'}
 
-  '@sly-cli/sly@1.14.0':
-    resolution: {integrity: sha512-hczYYDeTUU+CMTMMcfH4MTN9dLyzivfAISI0EyTHLzHHJnTSOWYqJwyNRib+/yrSumdDMSym4n8zBRZEhJpyBw==}
+  '@sly-cli/sly@2.1.1':
+    resolution: {integrity: sha512-Zqffyy42CWzZuRdsdXrTPlmtZs5WRqQ9twj7PSt/4ZvMbA15RhTjlN/4q4H9fdkhushh9KkIjDc8/6ZcfxHQxw==}
     hasBin: true
 
   '@tailwindcss/nesting@0.0.0-insiders.565cd3e':
@@ -4737,6 +4737,10 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
+  jsonata@2.1.0:
+    resolution: {integrity: sha512-OCzaRMK8HobtX8fp37uIVmL8CY1IGc/a6gLsDqz3quExFR09/U78HUzWYr7T31UEB6+Eu0/8dkVD5fFDOl9a8w==}
+    engines: {node: '>= 8'}
+
   jsonfile@6.1.0:
     resolution: {integrity: sha512-5dgndWOriYSm5cnYaJNhalLNDKOqFwyDB/rr1E9ZsGciGvKPs8R2xYGCacuf3z6K1YKDz182fd+fY3cn3pMqXQ==}
 
@@ -6135,6 +6139,10 @@ packages:
   reusify@1.0.4:
     resolution: {integrity: sha512-U9nH88a3fc/ekCF1l0/UP1IosiuIjyTh7hBvXVMHYgVcfGvt897Xguj2UOLDeI5BG2m7/uwyaLVT6fbtCwTyzw==}
     engines: {iojs: '>=1.0.0', node: '>=0.10.0'}
+
+  rimraf@5.0.10:
+    resolution: {integrity: sha512-l0OE8wL34P4nJH/H2ffoaniAokM2qSmrtXHmlpvYr5AVVX8msAyW0l8NVJFDxlSK4u3Uh/f41cQheDVdnYijwQ==}
+    hasBin: true
 
   rollup@4.24.4:
     resolution: {integrity: sha512-vGorVWIsWfX3xbcyAS+I047kFKapHYivmkaT63Smj77XwvLSJos6M1xGqZnBPFQFBRZDOcG1QnYEIxAvTr/HjA==}
@@ -9163,19 +9171,17 @@ snapshots:
       - encoding
       - supports-color
 
-  '@sly-cli/sly@1.14.0(typescript@5.6.3)':
+  '@sly-cli/sly@2.1.1(typescript@5.6.3)':
     dependencies:
-      '@epic-web/cachified': 5.2.0
-      chalk: 5.3.0
       commander: 11.1.0
       compare-versions: 6.1.1
       cosmiconfig: 8.3.6(typescript@5.6.3)
-      esbuild: 0.19.12
       execa: 7.2.0
+      jsonata: 2.1.0
       lru-cache: 10.4.3
       ora: 6.3.1
       prompts: 2.4.2
-      zod: 3.23.8
+      rimraf: 5.0.10
     transitivePeerDependencies:
       - typescript
 
@@ -11758,6 +11764,8 @@ snapshots:
 
   json5@2.2.3: {}
 
+  jsonata@2.1.0: {}
+
   jsonfile@6.1.0:
     dependencies:
       universalify: 2.0.1
@@ -13261,6 +13269,10 @@ snapshots:
   retry@0.12.0: {}
 
   reusify@1.0.4: {}
+
+  rimraf@5.0.10:
+    dependencies:
+      glob: 10.4.5
 
   rollup@4.24.4:
     dependencies:

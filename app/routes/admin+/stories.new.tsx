@@ -559,7 +559,7 @@ export async function action({ request }: ActionFunctionArgs) {
 	}
 
     if (storyType === 'audiobook') {
-        const { parseFile } = await import('music-metadata')
+	const { parseFile } = await import('music-metadata')
         const { create64 } = await xxhash()
 
         for (const filepath of validFilepaths) {
@@ -602,10 +602,10 @@ export async function action({ request }: ActionFunctionArgs) {
                     console.warn('Failed to parse metadata for', filepath, e)
                 }
 
-                const { common } = metadata
+	const { common } = metadata
 
-                const originalFilename = path.basename(filepath).split('-').slice(2).join('-')
-                const title = common.title ?? originalFilename.replace(/\.[^/.]+$/, "")
+	const originalFilename = path.basename(filepath).split('-').slice(2).join('-')
+	const title = common.title ?? originalFilename.replace(/\.[^/.]+$/, "")
                 let coverPicture = common.picture?.[0]
                 let coverBlob: Buffer | null = coverPicture ? Buffer.from(coverPicture.data) : null
                 let coverContentType = coverPicture ? coverPicture.format : 'image/jpeg'
@@ -638,71 +638,71 @@ export async function action({ request }: ActionFunctionArgs) {
                 console.log(`[Upload] Has Cover: ${!!coverBlob} (${coverContentType})`)
                 console.log(`[Upload] Comments:`, common.comment)
 
-                const story = await prisma.story.create({
-                    data: {
-                        title,
+	const story = await prisma.story.create({
+		data: {
+			title,
                         type,
                         originalLink,
-                        tags: tagIds.length > 0 ? { connect: tagIds.map(id => ({ id })) } : undefined,
+            tags: tagIds.length > 0 ? { connect: tagIds.map(id => ({ id })) } : undefined,
                         images: coverBlob ? {
-                            create: {
+				create: {
                                 contentType: coverContentType,
                                 blob: coverBlob,
-                                altText: title,
-                            },
-                        } : undefined,
-                        audio: {
-                            create: {
-                                contentType: mimeType,
-                                filepath: filepath,
+					altText: title,
+				},
+			} : undefined,
+			audio: {
+				create: {
+					contentType: mimeType,
+					filepath: filepath,
                                 // @ts-ignore
                                 fileHash,
-                            },
-                        },
-                    },
-                })
+				},
+			},
+		},
+	})
 
-                let chapters: any[] = []
-                let duration = 0
+    let chapters: any[] = []
+    let duration = 0
 
-                try {
-                    console.log('Running custom ffprobe on:', filepath)
-                    const info = await probe(filepath)
+    try {
+        console.log('Running custom ffprobe on:', filepath)
+        const info = await probe(filepath)
                     // console.log('FFPROBE info chapters:', info.chapters ? info.chapters.length : 'None')
-                    chapters = info.chapters || []
-                    duration = info.format?.duration || 0
-                } catch (e) {
-                    console.error('ffprobe failed:', e)
+        chapters = info.chapters || []
+        duration = info.format?.duration || 0
+    } catch (e) {
+        console.error('ffprobe failed:', e)
                     duration = metadata.format?.duration || 0
-                }
+    }
 
-                if (chapters.length > 0) {
-                    await prisma.chapter.createMany({
-                        data: chapters.map((c: any, i: number) => ({
-                            title: c.tags?.title || `Chapter ${i + 1}`,
-                            order: i,
-                            startTime: parseFloat(c.start_time),
-                            endTime: parseFloat(c.end_time),
-                            storyId: story.id,
-                        })),
-                    })
-                } else {
-                    await prisma.chapter.create({
-                        data: {
+	if (chapters.length > 0) {
+		await prisma.chapter.createMany({
+			data: chapters.map((c: any, i: number) => ({
+				title: c.tags?.title || `Chapter ${i + 1}`,
+				order: i,
+				startTime: parseFloat(c.start_time),
+				endTime: parseFloat(c.end_time),
+				storyId: story.id,
+			})),
+		})
+	} else {
+		await prisma.chapter.create({
+			data: {
                             title: isVideo ? "Full Video" : "Full Audiobook",
-                            order: 0,
-                            startTime: 0,
-                            endTime: parseFloat(String(duration)),
-                            storyId: story.id,
-                        },
-                    })
+				order: 0,
+				startTime: 0,
+				endTime: parseFloat(String(duration)),
+				storyId: story.id,
+			},
+		})
                 }
             } catch (error) {
                 console.error(`Error processing file ${filepath}:`, error)
                 // Continue to next file
             }
         }
-    }
+	}
 
 	return redirect(`/admin/stories`)
 }

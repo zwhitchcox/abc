@@ -83,7 +83,7 @@ async function downloadImagesForItem(
 
   try {
     // Use Bing Images as it's more scraping-friendly
-    const searchQuery = `${item} ${topic} photo`;
+    const searchQuery = `${topic} ${item}`;
     await page.goto(
       `https://www.bing.com/images/search?q=${encodeURIComponent(searchQuery)}&FORM=HDRSC2`,
     );
