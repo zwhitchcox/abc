@@ -4,45 +4,54 @@ import { json } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { Card, CardHeader, CardTitle } from "#app/components/ui/card";
 import { Icon } from "#app/components/ui/icon";
+import { prisma } from "#app/utils/db.server.ts";
 
 export async function loader() {
   const imagesDir = process.env.IMAGES_DIR || (
     process.env.NODE_ENV === "production" ? "/data/images" : "./images"
   );
 
-  const topics: { name: string; imageCount: number; thumbnail: string | null }[] = [];
+  const dbTopics = await prisma.flashcardTopic.findMany({
+      include: {
+          items: true
+      },
+      orderBy: { name: 'asc' }
+  });
 
-  try {
-    const topicDirs = await readdir(imagesDir);
+  const topics = await Promise.all(
+      dbTopics.map(async (topic) => {
+          const topicPath = join(imagesDir, topic.slug);
+          let imageCount = 0;
+          let thumbnail: string | null = null;
 
-    for (const topic of topicDirs) {
-      if (topic.startsWith('.')) continue;
+          try {
+              // We iterate over DB items to check their images
+              for (const item of topic.items) {
+                  const itemPath = join(topicPath, item.slug);
+                  try {
+                      const images = await readdir(itemPath);
+                      const validImages = images.filter(img => /\.(jpg|jpeg|png|gif|webp)$/i.test(img));
+                      imageCount += validImages.length;
+                      if (!thumbnail && validImages.length > 0) {
+                          thumbnail = `/images/${topic.slug}/${item.slug}/${validImages[0]}`;
+                      }
+                  } catch {}
+              }
+          } catch {}
 
-      const topicPath = join(imagesDir, topic);
-      let imageCount = 0;
-      let thumbnail: string | null = null;
+          return {
+              name: topic.name,
+              slug: topic.slug,
+              imageCount,
+              thumbnail
+          };
+      })
+  );
 
-      try {
-        const items = await readdir(topicPath);
-        for (const item of items) {
-          if (item.startsWith('.')) continue;
-          const itemPath = join(topicPath, item);
-          const images = await readdir(itemPath);
-          const validImages = images.filter(img => /\.(jpg|jpeg|png|gif|webp)$/i.test(img));
-          imageCount += validImages.length;
-          if (!thumbnail && validImages.length > 0) {
-            thumbnail = `/images/${topic}/${item}/${validImages[0]}`;
-          }
-        }
-      } catch {}
-
-      if (imageCount > 0) {
-        topics.push({ name: topic, imageCount, thumbnail });
-      }
-    }
-  } catch (error) {
-    console.error("Error loading topics:", error);
-  }
+  // Filter out topics with no images if desired, or show them (user said "showing topics in the file", implies they want to see DB topics)
+  // But for the game, topics with 0 images are useless.
+  // I'll keep them but they might look empty.
+  // The user complaint was "only showing the topics in the file". So they want to see "minerals" if added to DB.
 
   return json({ topics });
 }
@@ -61,7 +70,7 @@ export default function FlashcardsIndex() {
         {topics.map((topic) => (
           <Link
             key={topic.name}
-            to={`/flashcards/play?topic=${encodeURIComponent(topic.name)}`}
+            to={`/flashcards/play?topic=${encodeURIComponent(topic.slug)}`}
             className="group block"
           >
             <Card className="h-full overflow-hidden hover:shadow-lg transition-all hover:-translate-y-1">
@@ -81,7 +90,7 @@ export default function FlashcardsIndex() {
               </div>
               <CardHeader>
                 <CardTitle className="capitalize flex justify-between items-center">
-                  {topic.name.replace(/-/g, ' ')}
+                  {topic.name}
                   <span className="text-sm font-normal text-muted-foreground bg-stone-100 dark:bg-stone-800 px-2 py-1 rounded-full">
                     {topic.imageCount} images
                   </span>
@@ -119,4 +128,3 @@ export default function FlashcardsIndex() {
     </div>
   );
 }
-

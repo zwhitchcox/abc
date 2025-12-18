@@ -8,66 +8,55 @@ import { Button } from '#app/components/ui/button.tsx'
 import { Icon } from '#app/components/ui/icon.tsx'
 import { downloadImagesForTopic, downloadImagesForItem } from '#app/utils/download-images.server.ts'
 import { requireUserWithRole } from '#app/utils/permissions.server.ts'
+import { prisma } from '#app/utils/db.server.ts'
+import { generateAudio } from '#app/utils/tts.server.ts'
 
-interface Topic {
-    name: string
-    items: string[]
-}
-
-interface Config {
-    topics: Topic[]
-    imagesPerItem: number
-}
-
-const configPath = path.join(process.cwd(), 'scripts', 'image-config.json')
 const imagesDir = path.join(process.cwd(), 'images')
-
-async function getConfig(): Promise<Config> {
-    if (await fs.pathExists(configPath)) {
-        return fs.readJSON(configPath)
-    }
-    return { topics: [], imagesPerItem: 10 }
-}
-
-async function saveConfig(config: Config): Promise<void> {
-    await fs.writeJSON(configPath, config, { spaces: 2 })
-}
+const IMAGES_PER_ITEM = 10 // Can be configurable later
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
     await requireUserWithRole(request, 'admin')
-    const topicName = params.topic
-    if (!topicName) throw new Response('Topic not found', { status: 404 })
+    const topicSlug = params.topic
+    if (!topicSlug) throw new Response('Topic not found', { status: 404 })
 
-    const config = await getConfig()
-    const topic = config.topics.find(t => t.name === topicName)
+    const topic = await prisma.flashcardTopic.findUnique({
+        where: { slug: topicSlug },
+        include: { items: { orderBy: { name: 'asc' } } }
+    })
+
     if (!topic) throw new Response('Topic not found', { status: 404 })
 
-    const topicDir = path.join(imagesDir, topicName.toLowerCase().replace(/\s+/g, '-'))
+    const topicDir = path.join(imagesDir, topic.slug)
 
     const itemsWithCounts = await Promise.all(
-        topic.items.map(async (itemName) => {
-            const itemDir = path.join(topicDir, itemName.toLowerCase().replace(/\s+/g, '-'))
+        topic.items.map(async (item) => {
+            const itemDir = path.join(topicDir, item.slug)
             let imageCount = 0
             let thumbnail: string | null = null
             if (await fs.pathExists(itemDir)) {
-                const files = await fs.readdir(itemDir)
-                const images = files.filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f))
-                imageCount = images.length
-                if (images.length > 0) {
-                    thumbnail = `/images/${topicName.toLowerCase().replace(/\s+/g, '-')}/${itemName.toLowerCase().replace(/\s+/g, '-')}/${images[0]}`
-                }
+                try {
+                    const files = await fs.readdir(itemDir)
+                    const images = files.filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f))
+                    imageCount = images.length
+                    if (images.length > 0) {
+                        thumbnail = `/images/${topic.slug}/${item.slug}/${images[0]}`
+                    }
+                } catch {}
             }
-            return { name: itemName, imageCount, thumbnail }
+            return { ...item, imageCount, thumbnail }
         })
     )
 
-    return json({ topic: topic.name, items: itemsWithCounts, imagesPerItem: config.imagesPerItem })
+    return json({ topic: topic.name, items: itemsWithCounts, imagesPerItem: IMAGES_PER_ITEM })
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
     await requireUserWithRole(request, 'admin')
-    const topicName = params.topic
-    if (!topicName) return json({ error: 'Topic not found' }, { status: 404 })
+    const topicSlug = params.topic
+    if (!topicSlug) return json({ error: 'Topic not found' }, { status: 404 })
+
+    const topic = await prisma.flashcardTopic.findUnique({ where: { slug: topicSlug }, include: { items: true } })
+    if (!topic) return json({ error: 'Topic not found' }, { status: 404 })
 
     const formData = await request.formData()
     const intent = formData.get('intent')
@@ -78,24 +67,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
             model: 'gpt-4o-mini',
             messages: [{
                 role: 'user',
-                content: `Generate a list of 30 different ${topicName} that would be good for a children's educational flashcard quiz. Include a mix of common and interesting ones. Output ONLY a JSON array of strings with the names, nothing else. Example: ["item1", "item2", "item3"]`
+                content: `Generate a list of 30 different ${topic.name} that would be good for a children's educational flashcard quiz. Include a mix of common and interesting ones. Output ONLY a JSON array of strings with the names, nothing else. Example: ["item1", "item2", "item3"]`
             }],
             max_tokens: 1000,
         })
 
         const content = response.choices[0]?.message?.content?.trim() || '[]'
-        console.log('AI Response:', content)
         try {
             const jsonMatch = content.match(/\[[\s\S]*\]/)
             if (!jsonMatch) {
-                console.error('No JSON array found in response:', content)
-                return json({ suggestions: [], error: `No JSON array in response: ${content.substring(0, 100)}` })
+                return json({ suggestions: [], error: `No JSON array in response` })
             }
             const suggestions = JSON.parse(jsonMatch[0]) as string[]
             return json({ suggestions })
         } catch (e) {
-            console.error('Failed to parse AI response:', content, e)
-            return json({ suggestions: [], error: `Failed to parse: ${content.substring(0, 100)}` })
+            return json({ suggestions: [], error: `Failed to parse AI response` })
         }
     }
 
@@ -104,16 +90,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
         if (typeof itemsJson !== 'string') return json({ error: 'Items required' }, { status: 400 })
 
         const newItems = JSON.parse(itemsJson) as string[]
-        const config = await getConfig()
-        const topic = config.topics.find(t => t.name === topicName)
-        if (!topic) return json({ error: 'Topic not found' }, { status: 404 })
+        const addedCount = 0
 
-        const existingLower = new Set(topic.items.map(i => i.toLowerCase()))
-        const toAdd = newItems.filter(i => !existingLower.has(i.toLowerCase()))
-        topic.items.push(...toAdd)
-        await saveConfig(config)
+        for (const itemName of newItems) {
+            const slug = itemName.trim().toLowerCase().replace(/\s+/g, '-')
+            try {
+                await prisma.flashcardItem.upsert({
+                    where: { topicId_slug: { topicId: topic.id, slug } },
+                    create: {
+                        name: itemName.trim(),
+                        slug,
+                        topicId: topic.id
+                    },
+                    update: {}
+                })
 
-        return json({ success: true, added: toAdd.length })
+                // Generate audio
+                await generateAudio(itemName.trim())
+            } catch {}
+        }
+
+        return json({ success: true, added: newItems.length })
     }
 
     if (intent === 'addItem') {
@@ -122,45 +119,70 @@ export async function action({ request, params }: ActionFunctionArgs) {
             return json({ error: 'Item name required' }, { status: 400 })
         }
 
-        const config = await getConfig()
-        const topic = config.topics.find(t => t.name === topicName)
-        if (!topic) return json({ error: 'Topic not found' }, { status: 404 })
+        const slug = itemName.trim().toLowerCase().replace(/\s+/g, '-')
 
-        if (topic.items.some(i => i.toLowerCase() === itemName.toLowerCase())) {
+        try {
+            await prisma.flashcardItem.create({
+                data: {
+                    name: itemName.trim(),
+                    slug,
+                    topicId: topic.id
+                }
+            })
+            // Generate audio
+            await generateAudio(itemName.trim())
+        } catch {
             return json({ error: 'Item already exists' }, { status: 400 })
         }
 
-        topic.items.push(itemName.trim())
-        await saveConfig(config)
         return json({ success: true })
     }
 
     if (intent === 'deleteItem') {
-        const itemName = formData.get('itemName')
-        if (typeof itemName !== 'string') return json({ error: 'Item name required' }, { status: 400 })
+        const itemId = formData.get('itemId')
+        if (typeof itemId !== 'string') return json({ error: 'Item ID required' }, { status: 400 })
 
-        const config = await getConfig()
-        const topic = config.topics.find(t => t.name === topicName)
-        if (!topic) return json({ error: 'Topic not found' }, { status: 404 })
+        const item = await prisma.flashcardItem.findUnique({ where: { id: itemId } })
+        if (item) {
+            await prisma.flashcardItem.delete({ where: { id: itemId } })
 
-        topic.items = topic.items.filter(i => i !== itemName)
-        await saveConfig(config)
-
-        const itemDir = path.join(imagesDir, topicName.toLowerCase().replace(/\s+/g, '-'), itemName.toLowerCase().replace(/\s+/g, '-'))
-        if (await fs.pathExists(itemDir)) {
-            await fs.remove(itemDir)
+            const itemDir = path.join(imagesDir, topic.slug, item.slug)
+            if (await fs.pathExists(itemDir)) {
+                await fs.remove(itemDir)
+            }
         }
 
         return json({ success: true })
     }
 
     if (intent === 'downloadAllImages') {
-        const config = await getConfig()
-        const topic = config.topics.find(t => t.name === topicName)
-        if (!topic) return json({ error: 'Topic not found' }, { status: 404 })
+        const itemsRaw = formData.get('items')
+        const maxPerItemRaw = formData.get('maxPerItem')
+        const maxPerItem = typeof maxPerItemRaw === 'string' ? Number(maxPerItemRaw) : undefined
+
+        const allItemNames = new Set(topic.items.map(i => i.name))
+        let itemsToDownload = topic.items.map(i => i.name)
+
+        if (typeof itemsRaw === 'string') {
+            try {
+                const parsed = JSON.parse(itemsRaw) as unknown
+                if (Array.isArray(parsed)) {
+                    const filtered = parsed
+                        .filter((x): x is string => typeof x === 'string')
+                        .filter(name => allItemNames.has(name))
+                    if (filtered.length > 0) itemsToDownload = filtered
+                }
+            } catch {}
+        }
 
         try {
-            const result = await downloadImagesForTopic(topicName, topic.items, imagesDir, config.imagesPerItem)
+            const result = await downloadImagesForTopic(
+                topic.name,
+                itemsToDownload,
+                imagesDir,
+                IMAGES_PER_ITEM,
+                Number.isFinite(maxPerItem) && (maxPerItem as number) > 0 ? (maxPerItem as number) : undefined
+            )
             return json({ success: true, ...result })
         } catch (error) {
             return json({ error: 'Failed to download images', details: String(error) }, { status: 500 })
@@ -171,11 +193,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
         const itemName = formData.get('itemName')
         if (typeof itemName !== 'string') return json({ error: 'Item name required' }, { status: 400 })
 
-        const config = await getConfig()
-        const needed = config.imagesPerItem
-
         try {
-            const result = await downloadImagesForItem(topicName, itemName, imagesDir, needed)
+            const result = await downloadImagesForItem(topic.name, itemName, imagesDir, IMAGES_PER_ITEM)
             return json({ success: true, ...result, item: itemName })
         } catch (error) {
             return json({ error: 'Failed to download images', details: String(error) }, { status: 500 })
@@ -193,10 +212,12 @@ export default function FlashcardsTopicAdmin() {
     const deleteFetcher = useFetcher()
     const downloadFetcher = useFetcher<{ success?: boolean; downloaded?: number; error?: string; results?: { item: string; downloaded: number }[] }>()
     const itemDownloadFetcher = useFetcher<{ success?: boolean; downloaded?: number; item?: string }>()
-    const { revalidate } = useRevalidator()
+    const revalidator = useRevalidator()
     const [showAddForm, setShowAddForm] = useState(false)
     const [newItemName, setNewItemName] = useState('')
     const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set())
+    const [isDownloadingAll, setIsDownloadingAll] = useState(false)
+    const [downloadedAll, setDownloadedAll] = useState(0)
 
     const suggestions = suggestFetcher.data?.suggestions || []
     const isLoadingSuggestions = suggestFetcher.state === 'submitting'
@@ -206,9 +227,9 @@ export default function FlashcardsTopicAdmin() {
 
     useEffect(() => {
         if (downloadFetcher.data?.success || itemDownloadFetcher.data?.success) {
-            revalidate()
+            revalidator.revalidate()
         }
-    }, [downloadFetcher.data, itemDownloadFetcher.data, revalidate])
+    }, [downloadFetcher.data, itemDownloadFetcher.data, revalidator])
 
     const handleGetSuggestions = () => {
         suggestFetcher.submit({ intent: 'suggestItems' }, { method: 'post' })
@@ -247,7 +268,8 @@ export default function FlashcardsTopicAdmin() {
     }
 
     const handleDownloadAll = () => {
-        downloadFetcher.submit({ intent: 'downloadAllImages' }, { method: 'post' })
+        setDownloadedAll(0)
+        setIsDownloadingAll(true)
     }
 
     const handleDownloadItem = (itemName: string) => {
@@ -257,6 +279,34 @@ export default function FlashcardsTopicAdmin() {
     const itemsNeedingImages = items.filter(i => i.imageCount < imagesPerItem).length
     const totalImages = items.reduce((sum, i) => sum + i.imageCount, 0)
     const totalNeeded = items.length * imagesPerItem
+
+    useEffect(() => {
+        if (!isDownloadingAll) return
+        if (downloadFetcher.data?.error) {
+            setIsDownloadingAll(false)
+            return
+        }
+        if (downloadFetcher.data?.success && typeof downloadFetcher.data.downloaded === 'number') {
+            setDownloadedAll(prev => prev + downloadFetcher.data.downloaded!)
+        }
+    }, [downloadFetcher.data, isDownloadingAll])
+
+    useEffect(() => {
+        if (!isDownloadingAll) return
+        if (isDownloading) return
+        if (revalidator.state !== 'idle') return
+
+        const next = items.find(i => i.imageCount < imagesPerItem)
+        if (!next) {
+            setIsDownloadingAll(false)
+            return
+        }
+
+        downloadFetcher.submit(
+            { intent: 'downloadAllImages', items: JSON.stringify([next.name]), maxPerItem: '3' },
+            { method: 'post' }
+        )
+    }, [isDownloadingAll, isDownloading, items, imagesPerItem, downloadFetcher, revalidator.state])
 
     return (
         <div className="container mx-auto p-8 max-w-4xl">
@@ -274,9 +324,11 @@ export default function FlashcardsTopicAdmin() {
                     </div>
                     <div className="flex gap-2">
                         {itemsNeedingImages > 0 && (
-                            <Button onClick={handleDownloadAll} variant="default" disabled={isDownloading}>
+                            <Button onClick={handleDownloadAll} variant="default" disabled={isDownloadingAll || isDownloading}>
                                 <Icon name="download" className="mr-2 h-4 w-4" />
-                                {isDownloading ? 'Downloading...' : `Download All (${itemsNeedingImages} items)`}
+                                {isDownloadingAll
+                                    ? `Downloading... (${itemsNeedingImages} left)`
+                                    : `Download All (${itemsNeedingImages} items)`}
                             </Button>
                         )}
                         <Button onClick={handleGetSuggestions} variant="outline" disabled={isLoadingSuggestions}>
@@ -293,7 +345,7 @@ export default function FlashcardsTopicAdmin() {
 
             {downloadFetcher.data?.success && downloadFetcher.data.downloaded !== undefined && (
                 <div className="mb-4 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300">
-                    Downloaded {downloadFetcher.data.downloaded} images
+                    Downloaded {downloadFetcher.data.downloaded} images{isDownloadingAll ? ` (total this run: ${downloadedAll})` : ''}
                 </div>
             )}
 
@@ -382,7 +434,7 @@ export default function FlashcardsTopicAdmin() {
                     items.map(item => {
                         const needsImages = item.imageCount < imagesPerItem
                         return (
-                            <div key={item.name} className="flex items-center justify-between p-3 border rounded-lg bg-card hover:shadow-sm transition-shadow">
+                            <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg bg-card hover:shadow-sm transition-shadow">
                                 <Link to={`/admin/flashcards/${encodeURIComponent(params.topic!)}/${encodeURIComponent(item.name)}`} className="flex-1 flex items-center gap-3">
                                     <div className="h-10 w-10 bg-stone-100 dark:bg-stone-800 rounded-lg overflow-hidden flex items-center justify-center">
                                         {item.thumbnail ? (
@@ -416,7 +468,7 @@ export default function FlashcardsTopicAdmin() {
                                         <Icon name="pencil-1" className="h-4 w-4" />
                                     </Link>
                                     <deleteFetcher.Form method="post" onSubmit={(e) => !confirm(`Delete "${item.name}"?`) && e.preventDefault()}>
-                                        <input type="hidden" name="itemName" value={item.name} />
+                                        <input type="hidden" name="itemId" value={item.id} />
                                         <Button type="submit" name="intent" value="deleteItem" variant="ghost" size="sm" className="text-destructive hover:text-destructive">
                                             <Icon name="trash" className="h-4 w-4" />
                                         </Button>

@@ -19,12 +19,11 @@ import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import { PlayerProvider } from '#app/context/player.tsx'
 import appleTouchIconAssetUrl from './assets/favicons/apple-touch-icon.png'
 import faviconAssetUrl from './assets/favicons/favicon.svg'
-import { AppSidebar } from './components/app-sidebar.tsx'
+import { ImmersiveLayout } from './components/immersive-layout.tsx'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
 import { EpicProgress } from './components/progress-bar.tsx'
 import { useToast } from './components/toaster.tsx'
 import { href as iconsHref } from './components/ui/icon.tsx'
-import { SidebarProvider, SidebarTrigger } from './components/ui/sidebar.tsx'
 import { EpicToaster } from './components/ui/sonner.tsx'
 import { RootLayout } from './routes/_layout.tsx'
 import {
@@ -96,6 +95,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
 									},
 								},
 							},
+                            parentSettings: {
+                                select: {
+                                    pinCode: true,
+                                    isLocked: true,
+                                }
+                            },
 						},
 						where: { id: userId },
 					}),
@@ -196,40 +201,28 @@ export function Layout({ children }: { children: React.ReactNode }) {
 	)
 }
 
-const fullScreenRoutes = {
-	'/': true,
-	'/abc': true,
-	'/words': true,
-	'/colors': true,
-	'/flashcards': true,
-}
-
 function App() {
 	const data = useLoaderData<typeof loader>()
 	const theme = useTheme()
 	useToast(data.toast)
 	const location = useLocation()
 	const isFullScreen =
-		fullScreenRoutes[location.pathname as keyof typeof fullScreenRoutes] ||
+        location.pathname === '/' ||
+        location.pathname.startsWith('/abc') ||
+        location.pathname.startsWith('/words') ||
+        location.pathname.startsWith('/colors') ||
+        location.pathname.startsWith('/flashcards') ||
         location.pathname.startsWith('/stories') ||
         location.pathname.startsWith('/pdf-stories') ||
         location.pathname === '/timeout'
-
-    // Hide sidebar trigger specifically for stories/timeout routes
-    const isStoriesOrTimeout = location.pathname.startsWith('/stories') || location.pathname.startsWith('/pdf-stories') || location.pathname === '/timeout'
-    const showSidebarTrigger = !isStoriesOrTimeout
 
 	return (
         <PlayerProvider>
 		<>
 			{isFullScreen ? (
-				<SidebarProvider defaultOpen={false}>
-					<AppSidebar />
-					<main className="relative w-full">
-						{showSidebarTrigger && <SidebarTrigger className="absolute top-4 left-4 z-10" />}
-						<Outlet />
-					</main>
-				</SidebarProvider>
+				<ImmersiveLayout>
+					<Outlet />
+				</ImmersiveLayout>
 			) : (
 				<RootLayout>
 					<Outlet />

@@ -243,10 +243,10 @@ export default function AdminDashboard() {
                              <Link to="/admin/pdf-stories/new" className="flex-1 group p-6 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all flex flex-col items-center justify-center text-center min-h-[160px]">
                                 <div className="p-3 bg-white/20 rounded-full mb-3 group-hover:scale-110 transition-transform">
                                     <Icon name="file-text" className="h-6 w-6" />
-                                </div>
+                            </div>
                                 <span className="text-lg font-bold">Upload PDF</span>
                                 <span className="text-sm text-white/80">Process Book PDF</span>
-                             </Link>
+                         </Link>
                          </div>
 
                          <div className="grid grid-rows-5 gap-4">

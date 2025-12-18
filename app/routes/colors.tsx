@@ -317,12 +317,12 @@ export default function Colors() {
 
   return (
     <div
-      className="relative box-border h-full touch-manipulation select-none transition-colors duration-300"
+      className="relative box-border min-h-screen w-full touch-manipulation select-none transition-colors duration-300"
       style={{ backgroundColor: currentColor?.hex || "#FFFFFF" }}
     >
       <Button
         onClick={toggleModal}
-        className="absolute right-5 top-5 z-10 px-4 py-2 text-lg"
+        className="absolute left-5 top-5 z-10 px-4 py-2 text-lg"
       >
         Options
       </Button>

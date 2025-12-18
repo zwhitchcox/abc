@@ -7,15 +7,24 @@ import { Button } from '#app/components/ui/button.tsx'
 import { Icon } from '#app/components/ui/icon.tsx'
 import { downloadImagesForItem } from '#app/utils/download-images.server.ts'
 import { requireUserWithRole } from '#app/utils/permissions.server.ts'
+import { prisma } from '#app/utils/db.server.ts'
 
 const imagesDir = path.join(process.cwd(), 'images')
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
     await requireUserWithRole(request, 'admin')
-    const { topic, item } = params
-    if (!topic || !item) throw new Response('Not found', { status: 404 })
+    const { topic: topicSlug, item: itemSlug } = params
+    if (!topicSlug || !itemSlug) throw new Response('Not found', { status: 404 })
 
-    const itemDir = path.join(imagesDir, topic.toLowerCase().replace(/\s+/g, '-'), item.toLowerCase().replace(/\s+/g, '-'))
+    const topic = await prisma.flashcardTopic.findUnique({ where: { slug: topicSlug } })
+    if (!topic) throw new Response('Topic not found', { status: 404 })
+
+    const item = await prisma.flashcardItem.findUnique({
+        where: { topicId_slug: { topicId: topic.id, slug: itemSlug } }
+    })
+    if (!item) throw new Response('Item not found', { status: 404 })
+
+    const itemDir = path.join(imagesDir, topic.slug, item.slug)
     await fs.ensureDir(itemDir)
 
     const files = await fs.readdir(itemDir)
@@ -23,21 +32,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         .filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f))
         .map(f => ({
             filename: f,
-            url: `/images/${topic.toLowerCase().replace(/\s+/g, '-')}/${item.toLowerCase().replace(/\s+/g, '-')}/${f}`
+            url: `/images/${topic.slug}/${item.slug}/${f}`
         }))
 
-    return json({ topic, item, images })
+    return json({ topic: topic.name, item: item.name, images, topicSlug, itemSlug })
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
     await requireUserWithRole(request, 'admin')
-    const { topic, item } = params
-    if (!topic || !item) return json({ error: 'Not found' }, { status: 404 })
+    const { topic: topicSlug, item: itemSlug } = params
+    if (!topicSlug || !itemSlug) return json({ error: 'Not found' }, { status: 404 })
 
     const formData = await request.formData()
     const intent = formData.get('intent')
 
-    const itemDir = path.join(imagesDir, topic.toLowerCase().replace(/\s+/g, '-'), item.toLowerCase().replace(/\s+/g, '-'))
+    const itemDir = path.join(imagesDir, topicSlug, itemSlug)
 
     if (intent === 'deleteImage') {
         const filename = formData.get('filename')
@@ -54,8 +63,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         const countStr = formData.get('count')
         const count = parseInt(countStr as string, 10) || 5
 
+        const topic = await prisma.flashcardTopic.findUnique({ where: { slug: topicSlug } })
+        const item = await prisma.flashcardItem.findUnique({ where: { topicId_slug: { topicId: topic!.id, slug: itemSlug } } })
+
         try {
-            const result = await downloadImagesForItem(topic, item, imagesDir, count)
+            const result = await downloadImagesForItem(topic!.name, item!.name, imagesDir, count)
             return json({ success: true, ...result })
         } catch (error) {
             return json({ error: 'Failed to download images', details: String(error) }, { status: 500 })
@@ -66,8 +78,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function FlashcardsItemAdmin() {
-    const { topic, item, images } = useLoaderData<typeof loader>()
-    const params = useParams()
+    const { topic, item, images, topicSlug, itemSlug } = useLoaderData<typeof loader>()
     const fetcher = useFetcher<{ success?: boolean; downloaded?: number; error?: string }>()
     const deleteFetcher = useFetcher()
     const { revalidate } = useRevalidator()
@@ -114,7 +125,7 @@ export default function FlashcardsItemAdmin() {
     return (
         <div className="container mx-auto p-8 max-w-5xl">
             <div className="mb-6">
-                <Link to={`/admin/flashcards/${encodeURIComponent(params.topic!)}`} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-2">
+                <Link to={`/admin/flashcards/${encodeURIComponent(topicSlug)}`} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-2">
                     <Icon name="arrow-left" className="h-4 w-4" />
                     Back to {topic}
                 </Link>

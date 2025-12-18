@@ -1,5 +1,6 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/node'
 import { Form, useLoaderData, Link } from '@remix-run/react'
+import { useState } from 'react'
 import { Button } from '#app/components/ui/button.tsx'
 import { Checkbox } from '#app/components/ui/checkbox.tsx'
 import { Icon } from '#app/components/ui/icon.tsx'
@@ -9,6 +10,7 @@ import { ThemeSwitch, useOptionalTheme } from '#app/routes/resources+/theme-swit
 import { requireUserId } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { requireUserWithRole } from '#app/utils/permissions.server.ts'
+import { toast } from 'sonner'
 
 const TIMEZONES = [
   "UTC",
@@ -20,6 +22,16 @@ const TIMEZONES = [
   "Europe/Paris",
   "Asia/Tokyo",
   "Australia/Sydney"
+]
+
+const ACTIVITIES = [
+    { name: 'Home', path: '/' },
+    { name: 'Stories', path: '/stories' },
+    { name: 'Picture Books', path: '/pdf-stories' },
+    { name: 'Flashcards', path: '/flashcards' },
+    { name: 'ABC', path: '/abc' },
+    { name: 'Words', path: '/words' },
+    { name: 'Colors', path: '/colors' },
 ]
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -74,7 +86,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         type: data.type
     }))
 
-    return json({ settings, story, progress, usageWithDetails })
+    return json({ settings, story, progress, usageWithDetails, origin: new URL(request.url).origin })
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -88,9 +100,10 @@ export async function action({ request }: ActionFunctionArgs) {
         const showFullControls = formData.get('showFullControls') === 'on'
         const timeZone = String(formData.get('timeZone'))
         const maxVolume = Number(formData.get('maxVolume'))
+        const pinCode = String(formData.get('pinCode')).slice(0, 4)
+
         const globalLimitMinutes = Number(formData.get('globalLimitMinutes'))
         const globalIntervalHours = Number(formData.get('globalIntervalHours'))
-
         const globalLimitSeconds = globalLimitMinutes > 0 ? globalLimitMinutes * 60 : null
         const globalIntervalSeconds = globalIntervalHours > 0 ? globalIntervalHours * 3600 : 86400
 
@@ -113,12 +126,14 @@ export async function action({ request }: ActionFunctionArgs) {
         await prisma.parentSettings.upsert({
             where: { userId },
             update: {
-                maxChaptersToPlay, showFullControls, timeZone, maxVolume, globalLimitSeconds, globalIntervalSeconds,
+                maxChaptersToPlay, showFullControls, timeZone, maxVolume, pinCode,
+                globalLimitSeconds, globalIntervalSeconds,
                 audiobookLimitSeconds, audiobookIntervalSeconds, audiobookRestrictedStart, audiobookRestrictedEnd,
                 readaloudLimitSeconds, readaloudIntervalSeconds, readaloudRestrictedStart, readaloudRestrictedEnd
             },
             create: {
-                userId, maxChaptersToPlay, showFullControls, timeZone, maxVolume, globalLimitSeconds, globalIntervalSeconds,
+                userId, maxChaptersToPlay, showFullControls, timeZone, maxVolume, pinCode: pinCode || '0000',
+                globalLimitSeconds, globalIntervalSeconds,
                 audiobookLimitSeconds, audiobookIntervalSeconds, audiobookRestrictedStart, audiobookRestrictedEnd,
                 readaloudLimitSeconds, readaloudIntervalSeconds, readaloudRestrictedStart, readaloudRestrictedEnd
             }
@@ -147,8 +162,15 @@ function formatDuration(seconds: number) {
 }
 
 export default function ParentSettings() {
-    const { settings, story, progress, usageWithDetails } = useLoaderData<typeof loader>()
+    const { settings, story, progress, usageWithDetails, origin } = useLoaderData<typeof loader>()
     const theme = useOptionalTheme()
+    const [selectedActivity, setSelectedActivity] = useState(ACTIVITIES[0].path)
+
+    const copyLockLink = () => {
+        const url = `${origin}${selectedActivity}?lock=true`
+        navigator.clipboard.writeText(url)
+        toast.success('Locked URL copied to clipboard')
+    }
 
     return (
         <div className="container mx-auto p-6 max-w-md pb-20">
@@ -169,6 +191,26 @@ export default function ParentSettings() {
                 <input type="hidden" name="intent" value="updateSettings" />
 
                 <div className="space-y-2">
+                    <Label htmlFor="pinCode">Parent PIN Code</Label>
+                    <div className="flex gap-2">
+                        <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            id="pinCode"
+                            name="pinCode"
+                            defaultValue={settings?.pinCode ?? '0000'}
+                            maxLength={4}
+                            minLength={4}
+                            className="font-mono text-lg tracking-widest text-center"
+                        />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                        4-digit PIN to access the parent menu. Default is 0000.
+                    </p>
+                </div>
+
+                <div className="space-y-2 pt-4 border-t">
                     <Label htmlFor="timeZone">Time Zone</Label>
                     <select
                         id="timeZone"
@@ -178,9 +220,6 @@ export default function ParentSettings() {
                     >
                         {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
                     </select>
-                    <p className="text-xs text-muted-foreground">
-                        Used for scheduling restricted hours.
-                    </p>
                 </div>
 
                 <div className="space-y-2 pt-4 border-t">
@@ -193,9 +232,6 @@ export default function ParentSettings() {
                         min={1}
                         max={100}
                     />
-                    <p className="text-sm text-muted-foreground">
-                        Set to 1 to pause after every chapter.
-                    </p>
                 </div>
 
                 <div className="space-y-2 pt-4 border-t">
@@ -216,7 +252,25 @@ export default function ParentSettings() {
                              if (span) span.textContent = e.target.value + '%';
                         }}
                     />
-                    <p className="text-xs text-muted-foreground">Sets the upper limit for the child's volume control.</p>
+                </div>
+
+                <div className="space-y-2 pt-4 border-t">
+                    <h3 className="font-medium text-sm">Lock to Activity</h3>
+                    <p className="text-xs text-muted-foreground mb-2">
+                        Generate a link that locks the interface to a specific activity.
+                    </p>
+                    <div className="flex gap-2">
+                        <select
+                            value={selectedActivity}
+                            onChange={(e) => setSelectedActivity(e.target.value)}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                            {ACTIVITIES.map(a => <option key={a.path} value={a.path}>{a.name}</option>)}
+                        </select>
+                        <Button type="button" onClick={copyLockLink} variant="outline" className="shrink-0">
+                            Copy Link
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="space-y-2 pt-4 border-t">
@@ -244,74 +298,9 @@ export default function ParentSettings() {
                             />
                         </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">Applies to all content regardless of tags.</p>
                 </div>
 
-                {/* Audiobook Limits */}
                 <div className="space-y-2 pt-4 border-t">
-                    <h3 className="font-medium text-sm flex items-center gap-2">
-                        <Icon name="file-text" className="h-4 w-4" />
-                        Audiobook Limits
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                             <Label htmlFor="audiobookLimitMinutes">Limit (Min)</Label>
-                             <Input type="number" id="audiobookLimitMinutes" name="audiobookLimitMinutes"
-                                defaultValue={settings?.audiobookLimitSeconds ? Math.floor(settings.audiobookLimitSeconds / 60) : ''} min="0" />
-                        </div>
-                        <div>
-                             <Label htmlFor="audiobookIntervalHours">Reset (Hrs)</Label>
-                             <Input type="number" id="audiobookIntervalHours" name="audiobookIntervalHours"
-                                defaultValue={settings?.audiobookIntervalSeconds ? Math.floor(settings.audiobookIntervalSeconds / 3600) : 24} min="1" />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 mt-2">
-                         <div>
-                             <Label htmlFor="audiobookRestrictedStart">Disable Start (Hr)</Label>
-                             <Input type="number" id="audiobookRestrictedStart" name="audiobookRestrictedStart"
-                                defaultValue={settings?.audiobookRestrictedStart ?? ''} min="0" max="23" />
-                         </div>
-                         <div>
-                             <Label htmlFor="audiobookRestrictedEnd">Disable End (Hr)</Label>
-                             <Input type="number" id="audiobookRestrictedEnd" name="audiobookRestrictedEnd"
-                                defaultValue={settings?.audiobookRestrictedEnd ?? ''} min="0" max="23" />
-                         </div>
-                    </div>
-                </div>
-
-                {/* Readaloud Limits */}
-                <div className="space-y-2 pt-4 border-t">
-                    <h3 className="font-medium text-sm flex items-center gap-2">
-                        <Icon name="camera" className="h-4 w-4" />
-                        Read-Aloud Limits
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                             <Label htmlFor="readaloudLimitMinutes">Limit (Min)</Label>
-                             <Input type="number" id="readaloudLimitMinutes" name="readaloudLimitMinutes"
-                                defaultValue={settings?.readaloudLimitSeconds ? Math.floor(settings.readaloudLimitSeconds / 60) : ''} min="0" />
-                        </div>
-                        <div>
-                             <Label htmlFor="readaloudIntervalHours">Reset (Hrs)</Label>
-                             <Input type="number" id="readaloudIntervalHours" name="readaloudIntervalHours"
-                                defaultValue={settings?.readaloudIntervalSeconds ? Math.floor(settings.readaloudIntervalSeconds / 3600) : 24} min="1" />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 mt-2">
-                         <div>
-                             <Label htmlFor="readaloudRestrictedStart">Disable Start (Hr)</Label>
-                             <Input type="number" id="readaloudRestrictedStart" name="readaloudRestrictedStart"
-                                defaultValue={settings?.readaloudRestrictedStart ?? ''} min="0" max="23" />
-                         </div>
-                         <div>
-                             <Label htmlFor="readaloudRestrictedEnd">Disable End (Hr)</Label>
-                             <Input type="number" id="readaloudRestrictedEnd" name="readaloudRestrictedEnd"
-                                defaultValue={settings?.readaloudRestrictedEnd ?? ''} min="0" max="23" />
-                         </div>
-                    </div>
-                </div>
-
-                <div className="space-y-2">
                     <div className="flex items-center space-x-2">
                         <Checkbox
                             id="showFullControls"

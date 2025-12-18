@@ -62,6 +62,9 @@ model ParentSettings {
   videoDimmingStart Int?
   videoDimmingEnd   Int?
   videoDimmingLevel Int  @default(0) // 0 = Audio Only (Hidden), 1-100 = Opacity %
+
+  pinCode  String  @default("0000")
+  isLocked Boolean @default(false)
 }
 
 model Note {
@@ -332,4 +335,29 @@ model Job {
 
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   userId String?
+}
+
+model FlashcardTopic {
+  id   String @id @default(cuid())
+  name String @unique
+  slug String @unique
+
+  items FlashcardItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FlashcardItem {
+  id   String @id @default(cuid())
+  name String
+  slug String
+
+  topic   FlashcardTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topicId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([topicId, slug])
 }

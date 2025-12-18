@@ -1,7 +1,10 @@
 import http from 'http'
 import https from 'https'
+import { createRequire } from 'module'
 import path from 'path'
 import fs from 'fs-extra'
+
+const require = createRequire(import.meta.url)
 
 export async function downloadImage(url: string, filepath: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -29,7 +32,7 @@ export async function downloadImage(url: string, filepath: string): Promise<void
             reject(err)
         })
 
-        request.setTimeout(10000, () => {
+        request.setTimeout(6000, () => {
             request.destroy()
             fs.unlink(filepath, () => {})
             reject(new Error('Download timeout'))
@@ -43,7 +46,8 @@ export async function downloadImagesForItem(
     imagesDir: string,
     count: number
 ): Promise<{ downloaded: number }> {
-    const { chromium } = await import('@playwright/test')
+    // Use require to avoid Vite analysis of @playwright/test
+    const { chromium } = require('@playwright/test')
 
     const topicDir = path.join(imagesDir, topic.toLowerCase().replace(/\s+/g, '-'))
     const itemDir = path.join(topicDir, item.toLowerCase().replace(/\s+/g, '-'))
@@ -85,7 +89,7 @@ export async function downloadImagesForItem(
                     }
                 } catch {}
                 return null
-            }).filter((url): url is string => url !== null && url !== undefined && (url.startsWith('http://') || url.startsWith('https://')))
+            }).filter((url): url is string => typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://')))
         })
 
         let downloaded = 0
@@ -118,9 +122,10 @@ export async function downloadImagesForTopic(
     topicName: string,
     items: string[],
     imagesDir: string,
-    imagesPerItem: number
+    imagesPerItem: number,
+    maxDownloadsPerItem?: number
 ): Promise<{ downloaded: number; results: { item: string; downloaded: number }[] }> {
-    const { chromium } = await import('@playwright/test')
+    const { chromium } = require('@playwright/test')
 
     const topicDir = path.join(imagesDir, topicName.toLowerCase().replace(/\s+/g, '-'))
     await fs.ensureDir(topicDir)
@@ -131,7 +136,8 @@ export async function downloadImagesForTopic(
         await fs.ensureDir(itemDir)
         const files = await fs.readdir(itemDir)
         const existing = files.filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f)).length
-        const needed = imagesPerItem - existing
+        const rawNeeded = imagesPerItem - existing
+        const needed = Math.max(0, Math.min(rawNeeded, maxDownloadsPerItem ?? rawNeeded))
         if (needed > 0) {
             itemsNeedingImages.push({ name: itemName, needed })
         }
@@ -220,4 +226,3 @@ export async function downloadImagesForTopic(
         throw error
     }
 }
-
