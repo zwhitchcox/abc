@@ -3,6 +3,7 @@ import path from 'node:path'
 import { json, type LoaderFunctionArgs } from '@remix-run/node'
 import { useLoaderData, useNavigate, useSearchParams, isRouteErrorResponse, useRouteError } from '@remix-run/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { PdfStoryPrintModal } from '#app/components/pdf-story-print-modal.tsx'
 import { cn } from '#app/utils/misc.tsx'
 
 interface Marker {
@@ -44,11 +45,27 @@ export async function loader({ params }: LoaderFunctionArgs) {
 		}
 	} catch {}
 
+	// Check for showText / layout flags in metadata (for hand-authored books)
+	let showText = false
+	let layout: 'caption' | 'split' = 'caption'
+	try {
+		if (fs.existsSync(metadataPath)) {
+			const metadata = JSON.parse(await fs.promises.readFile(metadataPath, 'utf-8')) as {
+				showText?: boolean
+				layout?: 'caption' | 'split'
+			}
+			if (metadata.showText) showText = true
+			if (metadata.layout === 'split') layout = 'split'
+		}
+	} catch {}
+
 	return json({
 		storyName,
 		title,
 		markers,
 		totalPages,
+		showText,
+		layout,
 	})
 }
 
@@ -102,11 +119,13 @@ export default function PdfStoryPlayer() {
 	const [isPlaying, setIsPlaying] = useState(false)
 	const [showControls, setShowControls] = useState(true)
 	const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right')
+	const [printOpen, setPrintOpen] = useState(false)
 
-	const { storyName, title, markers } = data
+	const { storyName, title, markers, showText, layout } = data
 
 	const currentMarker = markers.find(m => m.page === currentPage)
 	const hasAudio = currentMarker && currentMarker.duration > 0
+	const hasAnyAudio = markers.some(m => m.duration > 0)
 
 	const pageStr = String(currentPage).padStart(2, '0')
 	const audioSrc = hasAudio ? `/resources/pdf-audio/${storyName}/${currentPage}` : undefined
@@ -182,56 +201,129 @@ export default function PdfStoryPlayer() {
 		return () => window.removeEventListener('keydown', handleKeyDown)
 	}, [currentPage, goToPage, navigate])
 
+	const hasCaption = Boolean(showText && currentMarker?.text && layout === 'caption')
+	const isSplit = layout === 'split' && Boolean(showText && currentMarker?.text)
+
 	return (
-		<div className="fixed inset-0 flex flex-col bg-black text-white overflow-hidden">
-			{/* Main Content Area */}
+		<div className={cn(
+			"fixed inset-0 flex flex-col overflow-hidden",
+			isSplit ? "bg-amber-50 text-stone-900" : "bg-black text-white"
+		)}>
+			{/* Image / Content Area (tap target for navigation) — also hosts top + bottom overlays */}
 			<div
-				className="relative flex-1 flex items-center justify-center h-full w-full cursor-pointer select-none"
+				className="relative flex-1 min-h-0 flex items-center justify-center cursor-pointer select-none"
 				onClick={handleTap}
 			>
-				{/* Image Container */}
+				{isSplit ? (
+					<div
+						key={currentPage}
+						className={cn(
+							"relative h-full w-full px-4 md:px-8 lg:px-12 py-16 md:py-20 transition-all duration-300 ease-out",
+							"flex flex-col md:flex-row items-stretch justify-center gap-6 md:gap-10 lg:gap-16",
+							slideDirection === 'right' ? 'animate-in slide-in-from-right-8 fade-in' : 'animate-in slide-in-from-left-8 fade-in'
+						)}
+					>
+						{/* Text panel (left) */}
+						<div className="flex-1 flex items-center justify-center min-h-0 min-w-0">
+							<div className="max-w-xl w-full space-y-5 md:space-y-7 font-comic text-stone-900 text-xl sm:text-2xl md:text-3xl lg:text-4xl font-semibold leading-snug">
+								{currentMarker!.text.split(/\n\n+/).map((para, i) => (
+									<p key={i}>{para}</p>
+								))}
+							</div>
+						</div>
+						{/* Image panel (right) */}
+						<div className="flex-1 flex items-center justify-center min-h-0 min-w-0">
+							<img
+								src={`/resources/pdf-images/${storyName}/${pageStr}`}
+								alt={`Page ${currentPage}`}
+								className="max-h-full max-w-full object-contain rounded-3xl shadow-2xl"
+								draggable={false}
+							/>
+						</div>
+					</div>
+				) : (
+					<div
+						key={currentPage}
+						className={cn(
+							"relative flex items-center justify-center h-full w-full p-2 transition-all duration-300 ease-out",
+							slideDirection === 'right' ? 'animate-in slide-in-from-right-8 fade-in' : 'animate-in slide-in-from-left-8 fade-in'
+						)}
+					>
+						<img
+							src={`/resources/pdf-images/${storyName}/${pageStr}`}
+							alt={`Page ${currentPage}`}
+							className="max-h-full max-w-full object-contain shadow-2xl"
+							draggable={false}
+						/>
+					</div>
+				)}
+
+				{/* Top Control Bar */}
 				<div
-					key={currentPage}
 					className={cn(
-						"relative max-h-[100dvh] max-w-full p-2 transition-all duration-300 ease-out",
-						slideDirection === 'right' ? 'animate-in slide-in-from-right-8 fade-in' : 'animate-in slide-in-from-left-8 fade-in'
+						"absolute top-0 left-0 right-0 p-4 transition-opacity duration-300 z-10 print:hidden",
+						isSplit
+							? "bg-gradient-to-b from-amber-50 to-transparent"
+							: "bg-gradient-to-b from-black/80 to-transparent",
+						showControls ? "opacity-100" : "opacity-0 pointer-events-none"
 					)}
 				>
-					<img
-						src={`/resources/pdf-images/${storyName}/${pageStr}`}
-						alt={`Page ${currentPage}`}
-						className="max-h-[calc(100dvh-2rem)] max-w-full object-contain shadow-2xl"
-						draggable={false}
-					/>
+					<div className="flex items-center justify-between max-w-4xl mx-auto gap-3">
+						<button
+							onClick={(e) => { e.stopPropagation(); navigate('/pdf-stories'); }}
+							className={cn(
+								"rounded-full px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors shrink-0",
+								isSplit ? "bg-stone-200 text-stone-900 hover:bg-stone-300" : "bg-black/40 text-white hover:bg-white/20"
+							)}
+						>
+							← Back
+						</button>
+						<h1 className={cn(
+							"text-lg font-serif font-bold truncate px-2 flex-1 text-center",
+							isSplit ? "text-stone-900" : "text-shadow-sm"
+						)}>{title}</h1>
+						<button
+							type="button"
+							onClick={(e) => {
+								e.stopPropagation()
+								setPrintOpen(true)
+							}}
+							aria-label="Print this book"
+							title="Print this book"
+							className={cn(
+								"rounded-full px-3 py-2 text-sm font-medium backdrop-blur-md transition-colors shrink-0 inline-flex items-center gap-1.5",
+								isSplit ? "bg-stone-200 text-stone-900 hover:bg-stone-300" : "bg-black/40 text-white hover:bg-white/20"
+							)}
+						>
+							<svg
+								className="w-5 h-5"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								strokeWidth={2}
+								aria-hidden="true"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									d="M6 9V4h12v5M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v7H6z"
+								/>
+							</svg>
+							<span className="hidden sm:inline">Print</span>
+						</button>
+					</div>
 				</div>
-			</div>
 
-			{/* Top Control Bar */}
-			<div
-				className={cn(
-					"absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent p-4 transition-opacity duration-300 z-10",
-					showControls ? "opacity-100" : "opacity-0 pointer-events-none"
-				)}
-			>
-				<div className="flex items-center justify-between max-w-4xl mx-auto">
-					<button
-						onClick={(e) => { e.stopPropagation(); navigate('/pdf-stories'); }}
-						className="rounded-full bg-black/40 px-4 py-2 text-sm font-medium backdrop-blur-md hover:bg-white/20 transition-colors"
-					>
-						← Back
-					</button>
-					<h1 className="text-lg font-serif font-bold text-shadow-sm truncate px-4">{title}</h1>
-					<div className="w-16"></div> {/* Spacer */}
-				</div>
-			</div>
-
-			{/* Bottom Control Bar */}
-			<div
-				className={cn(
-					"absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 pb-8 transition-opacity duration-300 z-10",
-					showControls ? "opacity-100" : "opacity-0 pointer-events-none"
-				)}
-			>
+				{/* Bottom Control Bar (inside image area so caption is never covered) */}
+				<div
+					className={cn(
+						"absolute bottom-0 left-0 right-0 p-6 pb-6 transition-opacity duration-300 z-10 print:hidden",
+						isSplit
+							? "bg-gradient-to-t from-amber-50 via-amber-50/90 to-transparent text-stone-900"
+							: "bg-gradient-to-t from-black/90 via-black/60 to-transparent",
+						showControls ? "opacity-100" : "opacity-0 pointer-events-none"
+					)}
+				>
 				<div className="max-w-2xl mx-auto flex flex-col gap-4">
 					{/* Progress Bar */}
 					<div className="flex flex-col items-center w-full gap-1">
@@ -247,7 +339,10 @@ export default function PdfStoryPlayer() {
 								value={currentPage}
 								onChange={(e) => goToPage(parseInt(e.target.value, 10))}
 								onKeyDown={(e) => e.stopPropagation()} // Prevent arrow keys from double-triggering
-								className="flex-1 h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-amber-400 hover:bg-white/30 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+								className={cn(
+									"flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-amber-500 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400/50",
+									isSplit ? "bg-stone-300 hover:bg-stone-400" : "bg-white/20 hover:bg-white/30"
+								)}
 							/>
 							<span className="text-[10px] opacity-50">{totalPages}</span>
 						</div>
@@ -258,41 +353,46 @@ export default function PdfStoryPlayer() {
 						<button
 							onClick={(e) => { e.stopPropagation(); goToPage(currentPage - 1); }}
 							className="p-3 rounded-full hover:bg-white/10 transition-colors"
+							aria-label="Previous page"
 						>
 							<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
 							</svg>
 						</button>
 
-						<button
-							onClick={(e) => {
-								e.stopPropagation()
-								if (audioRef.current) {
-									if (isPlaying) {
-										audioRef.current.pause()
-										setIsPlaying(false)
-									} else {
-										void audioRef.current.play()
-										setIsPlaying(true)
+						{hasAnyAudio ? (
+							<button
+								onClick={(e) => {
+									e.stopPropagation()
+									if (audioRef.current) {
+										if (isPlaying) {
+											audioRef.current.pause()
+											setIsPlaying(false)
+										} else {
+											void audioRef.current.play()
+											setIsPlaying(true)
+										}
 									}
-								}
-							}}
-							className="p-4 rounded-full bg-white text-black hover:scale-105 transition-transform shadow-lg"
-						>
-							{isPlaying ? (
-								<svg className="w-8 h-8 fill-current" viewBox="0 0 24 24">
-									<path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-								</svg>
-							) : (
-								<svg className="w-8 h-8 fill-current pl-1" viewBox="0 0 24 24">
-									<path d="M8 5v14l11-7z" />
-								</svg>
-							)}
-						</button>
+								}}
+								className="p-4 rounded-full bg-white text-black hover:scale-105 transition-transform shadow-lg"
+								aria-label={isPlaying ? 'Pause' : 'Play'}
+							>
+								{isPlaying ? (
+									<svg className="w-8 h-8 fill-current" viewBox="0 0 24 24">
+										<path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+									</svg>
+								) : (
+									<svg className="w-8 h-8 fill-current pl-1" viewBox="0 0 24 24">
+										<path d="M8 5v14l11-7z" />
+									</svg>
+								)}
+							</button>
+						) : null}
 
 						<button
 							onClick={(e) => { e.stopPropagation(); goToPage(currentPage + 1); }}
 							className="p-3 rounded-full hover:bg-white/10 transition-colors"
+							aria-label="Next page"
 						>
 							<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -300,16 +400,37 @@ export default function PdfStoryPlayer() {
 						</button>
 					</div>
 				</div>
+				</div>
 			</div>
 
-			<audio
-				ref={audioRef}
-				src={audioSrc}
-				onEnded={() => setIsPlaying(false)}
-				onPlay={() => setIsPlaying(true)}
-				onPause={() => setIsPlaying(false)}
-				onError={(e) => console.error("Audio Error", e)}
-				playsInline
+			{/* Caption band — static, below the image area, never covered by controls */}
+			{hasCaption ? (
+				<div className="shrink-0 bg-white text-stone-900 px-6 py-5 text-center font-comic font-bold text-3xl sm:text-4xl md:text-5xl leading-snug shadow-[0_-4px_16px_rgba(0,0,0,0.25)]">
+					{currentMarker!.text}
+				</div>
+			) : null}
+
+			{hasAnyAudio ? (
+				<audio
+					ref={audioRef}
+					src={audioSrc}
+					onEnded={() => setIsPlaying(false)}
+					onPlay={() => setIsPlaying(true)}
+					onPause={() => setIsPlaying(false)}
+					onError={(e) => console.error("Audio Error", e)}
+					playsInline
+				/>
+			) : null}
+
+			<PdfStoryPrintModal
+				open={printOpen}
+				onClose={() => setPrintOpen(false)}
+				storyName={storyName}
+				title={title}
+				markers={markers}
+				totalPages={totalPages}
+				showText={showText}
+				layout={layout}
 			/>
 		</div>
 	)
