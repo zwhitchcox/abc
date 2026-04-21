@@ -1,9 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { json, type LoaderFunctionArgs } from '@remix-run/node'
-import { useLoaderData, useNavigate, useSearchParams, isRouteErrorResponse, useRouteError } from '@remix-run/react'
+import { Link, useLoaderData, useNavigate, useSearchParams, isRouteErrorResponse, useRouteError } from '@remix-run/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { PdfStoryPrintModal } from '#app/components/pdf-story-print-modal.tsx'
 import { cn } from '#app/utils/misc.tsx'
 
 interface Marker {
@@ -119,7 +118,6 @@ export default function PdfStoryPlayer() {
 	const [isPlaying, setIsPlaying] = useState(false)
 	const [showControls, setShowControls] = useState(true)
 	const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right')
-	const [printOpen, setPrintOpen] = useState(false)
 
 	const { storyName, title, markers, showText, layout } = data
 
@@ -282,35 +280,16 @@ export default function PdfStoryPlayer() {
 							"text-lg font-serif font-bold truncate px-2 flex-1 text-center",
 							isSplit ? "text-stone-900" : "text-shadow-sm"
 						)}>{title}</h1>
-						<button
-							type="button"
-							onClick={(e) => {
-								e.stopPropagation()
-								setPrintOpen(true)
-							}}
-							aria-label="Print this book"
-							title="Print this book"
+						<Link
+							to={`/pdf-stories/${storyName}/print`}
+							onClick={(e) => e.stopPropagation()}
 							className={cn(
-								"rounded-full px-3 py-2 text-sm font-medium backdrop-blur-md transition-colors shrink-0 inline-flex items-center gap-1.5",
+								"rounded-full px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors shrink-0",
 								isSplit ? "bg-stone-200 text-stone-900 hover:bg-stone-300" : "bg-black/40 text-white hover:bg-white/20"
 							)}
 						>
-							<svg
-								className="w-5 h-5"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-								strokeWidth={2}
-								aria-hidden="true"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									d="M6 9V4h12v5M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v7H6z"
-								/>
-							</svg>
-							<span className="hidden sm:inline">Print</span>
-						</button>
+							Print
+						</Link>
 					</div>
 				</div>
 
@@ -421,17 +400,6 @@ export default function PdfStoryPlayer() {
 					playsInline
 				/>
 			) : null}
-
-			<PdfStoryPrintModal
-				open={printOpen}
-				onClose={() => setPrintOpen(false)}
-				storyName={storyName}
-				title={title}
-				markers={markers}
-				totalPages={totalPages}
-				showText={showText}
-				layout={layout}
-			/>
 		</div>
 	)
 }
