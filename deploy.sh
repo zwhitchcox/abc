@@ -8,6 +8,7 @@ APP_NAME="zephyr"
 BACKUP_DIR="$DIR/backups"
 LOCAL_DB="prisma/data.db"
 REMOTE_DB="$DIR/prisma/data.db"
+SYNC_CONTENT_DB="${SYNC_CONTENT_DB:-auto}"
 SANITIZED_ENV=""
 APP_STOPPED=0
 
@@ -30,9 +31,14 @@ if [ ! -f .env.production ]; then
     exit 1
 fi
 
-if [ ! -f "$LOCAL_DB" ]; then
-    echo "Error: $LOCAL_DB file not found!"
+SYNC_DB=0
+if [ -f "$LOCAL_DB" ]; then
+    SYNC_DB=1
+elif [ "$SYNC_CONTENT_DB" = "required" ]; then
+    echo "Error: $LOCAL_DB file not found, and SYNC_CONTENT_DB=required."
     exit 1
+else
+    echo "No local $LOCAL_DB found; skipping content database sync."
 fi
 
 echo "Deploying source to $HOST..."
@@ -73,23 +79,27 @@ ssh "$USER@$HOST" "set -e; \
   npx prisma generate"
 
 if ssh "$USER@$HOST" "pm2 describe '$APP_NAME' >/dev/null"; then
-  echo "Stopping $APP_NAME before database sync..."
+  echo "Stopping $APP_NAME before database/schema changes..."
   ssh "$USER@$HOST" "pm2 stop '$APP_NAME'"
   APP_STOPPED=1
 else
   echo "No running PM2 app named $APP_NAME to stop."
 fi
 
-echo "Backing up remote database..."
-ssh "$USER@$HOST" "mkdir -p '$BACKUP_DIR' && \
-  if [ -f '$REMOTE_DB' ]; then \
-    cp '$REMOTE_DB' '$BACKUP_DIR/data.db.before-deploy-$(date +%Y%m%d-%H%M%S)'; \
-  else \
-    echo 'No remote prisma/data.db to backup'; \
-  fi"
+if [ "$SYNC_DB" = "1" ]; then
+  echo "Backing up remote database..."
+  ssh "$USER@$HOST" "mkdir -p '$BACKUP_DIR' && \
+    if [ -f '$REMOTE_DB' ]; then \
+      cp '$REMOTE_DB' '$BACKUP_DIR/data.db.before-deploy-$(date +%Y%m%d-%H%M%S)'; \
+    else \
+      echo 'No remote prisma/data.db to backup'; \
+    fi"
 
-echo "Syncing content database with rsync delta..."
-rsync -avz --inplace --no-whole-file --stats "$LOCAL_DB" "$USER@$HOST:$REMOTE_DB"
+  echo "Syncing content database with rsync delta..."
+  rsync -avz --inplace --no-whole-file --stats "$LOCAL_DB" "$USER@$HOST:$REMOTE_DB"
+else
+  echo "Content database sync skipped."
+fi
 
 echo "Applying database schema and starting app..."
 ssh "$USER@$HOST" "set -e; \
