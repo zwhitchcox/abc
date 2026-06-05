@@ -37,3 +37,11 @@ images*.tar.gz
 /data
 /bin
 /cookies.txt
+
+# local runtime/debug artifacts
+/.playwright-mcp
+/dev.log
+/server.log
+
+# local framework reference checkout
+/remix
