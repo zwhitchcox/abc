@@ -105,7 +105,9 @@ function parseBulletWords(text: string) {
   for (let line of text.split(/\r?\n/)) {
     let match = line.match(/^\s*-\s+(.+?)\s*$/);
     if (!match) continue;
-    let word = normalizeWord(match[1]);
+    let value = match[1];
+    if (!value) continue;
+    let word = normalizeWord(value);
     if (!word) continue;
     words.add(word);
   }

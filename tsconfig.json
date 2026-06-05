@@ -1,5 +1,14 @@
 {
 	"include": ["**/*.ts", "**/*.tsx"],
+	"exclude": [
+		"node_modules",
+		"my-remix-app",
+		"remix",
+		"build",
+		"server-build",
+		"public/build",
+		"playwright-report"
+	],
 	"extends": ["@epic-web/config/typescript"],
 	"compilerOptions": {
 		"paths": {

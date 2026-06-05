@@ -29,7 +29,6 @@ export type ImageSize =
   | "1024x1024"
   | "1536x1024"
   | "1024x1536"
-  | "1056x1632"
   | "auto";
 export type ImageQuality = "low" | "medium" | "high";
 export type ImageModel = "gpt-image-1" | "gpt-image-1.5" | "gpt-image-2";

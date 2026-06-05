@@ -184,7 +184,7 @@ export async function generateBook(config: BookConfig) {
     anchorOnCover = true,
   } = config;
   const layout = fullPageImages ? "caption" : requestedLayout;
-  const imageSize = fullPageImages ? "1056x1632" : requestedImageSize;
+  const imageSize = fullPageImages ? "1024x1536" : requestedImageSize;
 
   // --- book folder ---
   const baseDir = path.join(process.cwd(), "data", "processed-pdfs", folder);

@@ -164,11 +164,11 @@ function formatDuration(seconds: number) {
 export default function ParentSettings() {
     const { settings, story, progress, usageWithDetails, origin } = useLoaderData<typeof loader>()
     const theme = useOptionalTheme()
-    const [selectedActivity, setSelectedActivity] = useState(ACTIVITIES[0].path)
+    const [selectedActivity, setSelectedActivity] = useState(ACTIVITIES[0]?.path ?? '/')
 
     const copyLockLink = () => {
         const url = `${origin}${selectedActivity}?lock=true`
-        navigator.clipboard.writeText(url)
+        void navigator.clipboard.writeText(url)
         toast.success('Locked URL copied to clipboard')
     }
 

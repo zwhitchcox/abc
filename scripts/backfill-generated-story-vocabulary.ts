@@ -29,7 +29,8 @@ async function getGeneratedBookFolders() {
   for (let file of files) {
     let source = await fs.readFile(path.join(SCRIPT_DIR, file), "utf8");
     let match = source.match(/const\s+FOLDER\s*=\s*["']([^"']+)["']/);
-    if (match) folders.add(match[1]);
+    let folder = match?.[1];
+    if (folder) folders.add(folder);
   }
 
   return Array.from(folders).sort();

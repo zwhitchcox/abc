@@ -289,12 +289,14 @@ export default function FlashcardsTopicAdmin() {
 
     useEffect(() => {
         if (!isDownloadingAll) return
-        if (downloadFetcher.data?.error) {
+        const downloadData = downloadFetcher.data
+        if (downloadData?.error) {
             setIsDownloadingAll(false)
             return
         }
-        if (downloadFetcher.data?.success && typeof downloadFetcher.data.downloaded === 'number') {
-            setDownloadedAll(prev => prev + downloadFetcher.data.downloaded!)
+        const downloaded = downloadData?.downloaded
+        if (downloadData?.success && typeof downloaded === 'number') {
+            setDownloadedAll(prev => prev + downloaded)
         }
     }, [downloadFetcher.data, isDownloadingAll])
 
