@@ -1,9 +1,17 @@
 import { type ActionFunctionArgs, json, unstable_parseMultipartFormData, unstable_createMemoryUploadHandler } from "@remix-run/node";
 import OpenAI from "openai";
+import {
+  isServerAiEnabled,
+  serverAiDisabledMessage,
+} from "#app/utils/server-ai-policy.server.ts";
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  if (!isServerAiEnabled()) {
+    return json({ error: serverAiDisabledMessage() }, { status: 503 });
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -38,4 +46,3 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "Failed to transcribe audio" }, { status: 500 });
   }
 }
-

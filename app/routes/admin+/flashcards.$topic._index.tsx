@@ -3,6 +3,10 @@ import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-r
 import { Link, useLoaderData, useFetcher, useParams, useRevalidator } from '@remix-run/react'
 import fs from 'fs-extra'
 import OpenAI from 'openai'
+import {
+	isServerAiEnabled,
+	serverAiDisabledMessage,
+} from '#app/utils/server-ai-policy.server.ts'
 import { useState, useEffect } from 'react'
 import { Button } from '#app/components/ui/button.tsx'
 import { Icon } from '#app/components/ui/icon.tsx'
@@ -62,6 +66,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const intent = formData.get('intent')
 
     if (intent === 'suggestItems') {
+		if (!isServerAiEnabled()) {
+			return json({ suggestions: [], error: serverAiDisabledMessage() }, { status: 503 })
+		}
         const openai = new OpenAI()
         const response = await openai.chat.completions.create({
             model: 'gpt-4o-mini',

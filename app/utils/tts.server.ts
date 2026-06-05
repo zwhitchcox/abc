@@ -1,6 +1,14 @@
 import path from "path";
 import fs from "fs-extra";
 import OpenAI from "openai";
+import {
+  isServerAiEnabled,
+  serverAiDisabledMessage,
+} from "./server-ai-policy.server.ts";
+import {
+  getContentFile,
+  upsertContentFile,
+} from "#app/utils/content-store.server.ts";
 
 const TTS_PROMPT_VERSION = "3";
 
@@ -19,15 +27,40 @@ function getTtsCacheDir() {
   return path.join(process.cwd(), "data", "audio", "tts");
 }
 
+function ttsContentPath(filename: string) {
+  return `data/audio/tts/${filename}`;
+}
+
 export async function generateAudio(text: string): Promise<string | null> {
   const filename = ttsFilename(text);
   const cacheDir = getTtsCacheDir();
   const filePath = path.join(cacheDir, filename);
+  const contentPath = ttsContentPath(filename);
 
   await fs.ensureDir(cacheDir);
 
-  if (await fs.pathExists(filePath)) {
+  const storedFile = await getContentFile(contentPath);
+  if (storedFile) {
+    if (!(await fs.pathExists(filePath))) {
+      await fs.writeFile(filePath, Buffer.from(storedFile.blob));
+    }
     return filePath;
+  }
+
+  if (await fs.pathExists(filePath)) {
+    const stat = await fs.stat(filePath);
+    await upsertContentFile({
+      contentPath,
+      contentType: "audio/wav",
+      buffer: await fs.readFile(filePath),
+      fileMtime: stat.mtime,
+    });
+    return filePath;
+  }
+
+  if (!isServerAiEnabled()) {
+    console.error(serverAiDisabledMessage());
+    return null;
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -48,10 +81,14 @@ export async function generateAudio(text: string): Promise<string | null> {
 
     const buffer = Buffer.from(await wav.arrayBuffer());
     await fs.writeFile(filePath, buffer);
+    await upsertContentFile({
+      contentPath,
+      contentType: "audio/wav",
+      buffer,
+    });
     return filePath;
   } catch (error) {
     console.error("OpenAI TTS Error:", error);
     return null;
   }
 }
-

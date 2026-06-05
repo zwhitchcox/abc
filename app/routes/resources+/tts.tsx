@@ -1,7 +1,19 @@
 import path from "path";
-import { createReadableStreamFromReadable, type LoaderFunctionArgs } from "@remix-run/node";
+import {
+  createReadableStreamFromReadable,
+  type LoaderFunctionArgs,
+} from "@remix-run/node";
 import fs from "fs-extra";
 import OpenAI from "openai";
+import {
+  isServerAiEnabled,
+  serverAiDisabledMessage,
+} from "#app/utils/server-ai-policy.server.ts";
+import {
+  getContentFile,
+  responseFromStoredFile,
+  upsertContentFile,
+} from "#app/utils/content-store.server.ts";
 
 const TTS_PROMPT_VERSION = "3";
 
@@ -20,6 +32,10 @@ function getTtsCacheDir() {
   return path.join(process.cwd(), "data", "audio", "tts");
 }
 
+function ttsContentPath(filename: string) {
+  return `data/audio/tts/${filename}`;
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const text = url.searchParams.get("text");
@@ -32,11 +48,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const filename = ttsFilename(text);
   const cacheDir = getTtsCacheDir();
   const filePath = path.join(cacheDir, filename);
+  const contentPath = ttsContentPath(filename);
 
   await fs.ensureDir(cacheDir);
 
+  const storedFile = await getContentFile(contentPath);
+  if (storedFile) {
+    return responseFromStoredFile(storedFile, {
+      headers: {
+        "Cache-Control": "public, max-age=31536000",
+      },
+    });
+  }
+
   if (await fs.pathExists(filePath)) {
     const fileStats = await fs.stat(filePath);
+    const buffer = await fs.readFile(filePath);
+    await upsertContentFile({
+      contentPath,
+      contentType: "audio/wav",
+      buffer,
+      fileMtime: fileStats.mtime,
+    });
     const stream = fs.createReadStream(filePath);
     return new Response(createReadableStreamFromReadable(stream), {
       headers: {
@@ -47,11 +80,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
+  if (!isServerAiEnabled()) {
+    return new Response(serverAiDisabledMessage(), { status: 503 });
+  }
+
   // Generate with OpenAI
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-      console.error("Missing OPENAI_API_KEY");
-      return new Response("Server configuration error", { status: 500 });
+    console.error("Missing OPENAI_API_KEY");
+    return new Response("Server configuration error", { status: 500 });
   }
 
   const openai = new OpenAI({ apiKey });
@@ -66,6 +103,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const buffer = Buffer.from(await wav.arrayBuffer());
     await fs.writeFile(filePath, buffer);
+    await upsertContentFile({
+      contentPath,
+      contentType: "audio/wav",
+      buffer,
+    });
 
     return new Response(buffer, {
       headers: {
@@ -79,8 +121,3 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return new Response("Error generating audio", { status: 500 });
   }
 }
-
-
-
-
-
