@@ -6,33 +6,25 @@ import {
 } from "#app/utils/content-store.server.ts";
 import { findPdfStoryContentFile } from "#app/utils/pdf-story-content.server.ts";
 
-export async function loader({ params, request }: LoaderFunctionArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
   const { storyName, page } = params;
   invariantResponse(storyName && page, "Story name and page are required", {
     status: 400,
   });
 
-  const url = new URL(request.url);
-  const requestedStyle = url.searchParams.get("style");
-  const imageSubdir =
-    requestedStyle &&
-    requestedStyle !== "default" &&
-    /^[a-z0-9-]+$/.test(requestedStyle)
-      ? `images-${requestedStyle}`
-      : "images";
-
   const paddings = [2, 3, 4];
-  const fileNames = paddings.map(
-    (pad) => `page-${page.padStart(pad, "0")}.jpg`,
-  );
+  const fileNames = paddings.flatMap((pad) => {
+    const paddedPage = page.padStart(pad, "0");
+    return [`page-${paddedPage}.svg`, `page-${paddedPage}.png`];
+  });
   const match = await findPdfStoryContentFile(
     storyName,
-    imageSubdir,
+    "schematics",
     fileNames,
   );
 
   if (!match) {
-    throw new Response("Image not found", { status: 404 });
+    throw new Response("Schematic not found", { status: 404 });
   }
 
   const headers = {
@@ -43,7 +35,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     return responseFromStoredFile(match.storedFile, { headers });
   }
 
-  return responseFromFilesystemFile(match.fsPath, match.stat, "image/jpeg", {
+  return responseFromFilesystemFile(match.fsPath, match.stat, undefined, {
     headers,
   });
 }

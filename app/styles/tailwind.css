@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Andika:wght@400;700&display=swap");
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -138,5 +139,13 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .font-early-reader {
+    font-family: "Andika", "Comic Neue", "Comic Sans MS", "Chalkboard SE",
+      "Trebuchet MS", system-ui, sans-serif;
+    font-variant-ligatures: none;
   }
 }
