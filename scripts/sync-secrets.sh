@@ -23,6 +23,11 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
     continue
   fi
 
+  if [[ $key == "OPENAI_API_KEY" || $key == "GROQ_API_KEY" || $key == "ALLOW_SERVER_AI_GENERATION" ]]; then
+    echo "Skipping server-side AI secret: $key"
+    continue
+  fi
+
   # Remove surrounding quotes from value if present
   value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
 
@@ -32,4 +37,3 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
 done < "$ENV_FILE"
 
 echo "All secrets synced successfully!"
-

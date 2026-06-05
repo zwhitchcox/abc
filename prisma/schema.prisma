@@ -29,6 +29,12 @@ model User {
   usageLogs      UsageLog[]
   jobs           Job[]
   parentSettings ParentSettings?
+
+  storySubscription     StorySubscription?
+  childProfiles         ChildProfile[]
+  generatedStories      GeneratedStory[]
+  storyGenerationUsages StoryGenerationUsage[]
+  storyCreditLedger     StoryCreditLedger[]
 }
 
 model ParentSettings {
@@ -360,4 +366,147 @@ model FlashcardItem {
   updatedAt DateTime @updatedAt
 
   @@unique([topicId, slug])
+}
+
+model ContentFile {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  path        String    @unique
+  contentType String
+  blob        Bytes
+  size        Int
+  sha256      String
+  fileMtime   DateTime?
+
+  @@index([sha256])
+}
+
+model StorySubscription {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String @unique
+
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  status               String    @default("inactive")
+  priceCents           Int       @default(2000)
+  includedCostCents    Int       @default(1000)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+}
+
+model ChildProfile {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  ownerId String
+
+  name String
+
+  words   ChildWord[]
+  stories GeneratedStory[]
+
+  @@index([ownerId])
+}
+
+model ChildWord {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  child   ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  childId String
+
+  word     String
+  category String @default("general")
+
+  @@unique([childId, word])
+  @@index([childId, category])
+}
+
+model GeneratedStory {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  ownerId String
+
+  child   ChildProfile? @relation(fields: [childId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  childId String?
+
+  title              String
+  status             String  @default("draft")
+  prompt             String
+  sourceText         String?
+  pageCount          Int     @default(10)
+  wordList           String  @default("[]")
+  modelPlan          String  @default("{}")
+  estimatedCostCents Int     @default(0)
+  actualCostCents    Int     @default(0)
+
+  pages GeneratedStoryPage[]
+  usage StoryGenerationUsage[]
+
+  @@index([ownerId, createdAt])
+  @@index([childId])
+}
+
+model GeneratedStoryPage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  story   GeneratedStory @relation(fields: [storyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  storyId String
+
+  pageNumber  Int
+  text        String
+  imagePrompt String
+  imageUrl    String?
+  assetPath   String?
+  status      String  @default("draft")
+
+  @@unique([storyId, pageNumber])
+  @@index([storyId])
+}
+
+model StoryGenerationUsage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  story   GeneratedStory? @relation(fields: [storyId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  storyId String?
+
+  kind      String
+  model     String
+  quantity  Int    @default(1)
+  costCents Int
+  metadata  String @default("{}")
+
+  @@index([userId, createdAt])
+  @@index([storyId])
+}
+
+model StoryCreditLedger {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  source                String
+  amountCents           Int
+  stripePaymentIntentId String? @unique
+  note                  String?
+
+  @@index([userId, createdAt])
 }

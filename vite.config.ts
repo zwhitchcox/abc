@@ -25,7 +25,7 @@ export default defineConfig({
       }
     },
 
-    sourcemap: true,
+    sourcemap: MODE !== "production" || Boolean(process.env.SENTRY_AUTH_TOKEN),
   },
   server: {
     watch: {
