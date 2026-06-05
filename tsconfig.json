@@ -1,4 +1,5 @@
 {
+	"$schema": "https://json.schemastore.org/tsconfig",
 	"include": ["**/*.ts", "**/*.tsx"],
 	"exclude": [
 		"node_modules",
@@ -9,8 +10,20 @@
 		"public/build",
 		"playwright-report"
 	],
-	"extends": ["@epic-web/config/typescript"],
 	"compilerOptions": {
+		"isolatedModules": true,
+		"jsx": "react-jsx",
+		"module": "preserve",
+		"target": "ES2022",
+		"strict": true,
+		"skipLibCheck": true,
+		"allowImportingTsExtensions": true,
+		"noUncheckedIndexedAccess": true,
+		"noEmit": true,
+		"moduleResolution": "bundler",
+		"esModuleInterop": true,
+		"allowSyntheticDefaultImports": true,
+		"resolveJsonModule": true,
 		"paths": {
 			"#app/*": ["./app/*"],
 			"#tests/*": ["./tests/*"],
