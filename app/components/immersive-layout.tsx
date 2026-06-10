@@ -35,7 +35,7 @@ export function ImmersiveLayout({ children }: { children: React.ReactNode }) {
             <button
                 onClick={() => setGateOpen(true)}
                 className={cn(
-                    "fixed top-4 right-4 z-50 p-3 rounded-full text-white/20 hover:text-white/80 hover:bg-black/20 transition-all",
+                    "fixed top-4 right-4 z-50 p-3 rounded-full text-white/20 hover:text-white/80 hover:bg-black/20 transition-all print:hidden",
                     isLocked ? "opacity-0 hover:opacity-100 duration-500" : "opacity-50"
                 )}
                 aria-label="Parent Menu"

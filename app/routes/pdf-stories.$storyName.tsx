@@ -234,11 +234,6 @@ export default function PdfStoryPlayer() {
         typeof window !== "undefined" ? window.getSelection() : null;
       if (selection && selection.toString().length > 0) return;
 
-      // If the click target is text content (inside a <p> in our reader), let
-      // the browser handle selection rather than navigating.
-      const target = e.target as HTMLElement;
-      if (target.closest('[data-story-text="true"]')) return;
-
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const clientX = "touches" in e ? (e.touches[0]?.clientX ?? 0) : e.clientX;
       const x = clientX - rect.left;
@@ -253,12 +248,17 @@ export default function PdfStoryPlayer() {
       if (x < width * 0.3) {
         goToPage(currentPage - 1);
       }
-      // Right 30% -> Next
+      // Right 30% -> Next (reveals the picture first when it is hidden).
+      // These zones must work even when the tap lands on story text — when the
+      // picture is hidden the text fills the page, and swallowing those taps
+      // made it impossible to reveal the picture by tapping.
       else if (x > width * 0.7) {
         goForward();
       }
-      // Center 40% -> Toggle Controls
+      // Center 40% -> Toggle Controls, except on text so it stays selectable.
       else {
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-story-text="true"]')) return;
         toggleControls();
       }
     },
@@ -303,10 +303,11 @@ export default function PdfStoryPlayer() {
   }, [currentPage, goForward, goToPage, navigate]);
 
   const isCover = currentPage === 1;
+  const markerText = currentMarker?.text?.trim();
   const coverTitle = isCover ? title : null;
   const previousPage = currentPage <= 1 ? totalPages : currentPage - 1;
   const nextPage = currentPage >= totalPages ? 1 : currentPage + 1;
-  const hasPageText = Boolean(showText && currentMarker?.text);
+  const hasPageText = Boolean(showText && markerText && !isCover);
   // Keep split mode only for pages that need the extra schematic panel. Story
   // artwork itself now uses the full-page reader presentation for every book,
   // regardless of older per-book layout metadata.
@@ -317,7 +318,7 @@ export default function PdfStoryPlayer() {
     (hasPageText && !isSplit) || (isCover && coverTitle),
   );
   const showCaptionBand = hasCaption && showImage;
-  const captionText = isCover && coverTitle ? coverTitle : currentMarker?.text;
+  const captionText = coverTitle ?? currentMarker?.text;
   // Story pages with visible reading text should keep the reader chrome on a
   // single light surface instead of mixing a black stage with a white text band.
   const useLightBg = isSplit || hasCaption;

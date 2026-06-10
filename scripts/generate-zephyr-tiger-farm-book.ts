@@ -83,10 +83,10 @@ const PAGES: BookPage[] = [
   },
   {
     page: 3,
-    text: "daddy tiger opened the gate.",
+    text: "daddy tiger saw little chicks.",
     characters: ["daddy-tiger-clean-cartoon", "zephyr-tiger-clean-cartoon"],
     anchorOnCover: false,
-    prompt: `${PRINT_CLEAR} ${FAMILY_CONSISTENCY} ${FARM_STYLE} Daddy Tiger opens a simple white farm gate while Zephyr Tiger waits beside him on the grass. Daddy has exactly two visible front paws total, no extra arms, no duplicate paws. Draw exactly two tigers: Daddy and Zephyr. No other tigers, no text.`,
+    prompt: `${PRINT_CLEAR} ${FAMILY_CONSISTENCY} ${FARM_STYLE} Daddy Tiger and Zephyr Tiger kneel or stand on green grass and look gently at three tiny yellow baby chicks pecking near a small patch of hay. Make the baby chicks the clear story focus: small round yellow chicks with little orange beaks and feet. Daddy Tiger keeps both paws relaxed and visible, not holding anything. Zephyr Tiger smiles beside Daddy. Draw exactly two tigers: Daddy and Zephyr. No Mommy, no Auggie, no extra cubs. Do not draw any fence, gate, fence post, rail, board, plank, broken wood, or construction object. No text.`,
   },
   {
     page: 4,

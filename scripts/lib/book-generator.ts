@@ -262,10 +262,13 @@ export async function generateBook(config: BookConfig) {
 
   console.log(`Generating ${toGenerate.length} page images…`);
 
-  // --- sort so cover (page 1) is generated first if requested ---
+  // --- sort so cover (page 1) is generated first only when later pages need it ---
   const coverPath = path.join(imagesDir, `page-01.jpg`);
-  const coverNeeded = toGenerate.some((p) => p.page === 1);
-  if (coverNeeded) {
+  const coverInBatch = toGenerate.some((p) => p.page === 1);
+  const generatedPagesNeedCover =
+    anchorOnCover &&
+    toGenerate.some((p) => p.page !== 1 && p.anchorOnCover !== false);
+  if (coverInBatch && generatedPagesNeedCover) {
     // Pull page 1 out and do it first (synchronously), then do the rest.
     const cover = toGenerate.find((p) => p.page === 1)!;
     const rest = toGenerate.filter((p) => p.page !== 1);
@@ -344,7 +347,7 @@ async function generatePage(page: BookPage, ctx: PageGenContext) {
   // Collect reference images: style first, then cover (if used), then any
   // characters appearing on this page.
   const references: string[] = [ctx.stylePath];
-  if (ctx.coverPath && page.anchorOnCover !== false) {
+  if (ctx.coverPath && page.page !== 1 && page.anchorOnCover !== false) {
     references.push(ctx.coverPath);
   }
   const pageChars = page.characters ?? [];

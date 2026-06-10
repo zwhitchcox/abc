@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "story-app",
+      "runtimeExecutable": "/Users/zwhitchcox/.nvm/versions/node/v24.3.0/bin/node",
+      "runtimeArgs": ["./server/dev-server.js"],
+      "autoPort": true,
+      "env": {
+        "PATH": "/Users/zwhitchcox/.nvm/versions/node/v24.3.0/bin:/Users/zwhitchcox/dev/zwhitchcox/zephyr/abc/node_modules/.bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+      }
+    }
+  ]
+}

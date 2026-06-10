@@ -323,6 +323,7 @@ function FaceContent({
               alt={`Page ${p.page}`}
               className="face-image"
             />
+            {numberEl}
           </div>
           {hasText ? (
             <div
@@ -349,7 +350,7 @@ function FaceContent({
           ) : null}
         </>
       )}
-      {numberEl}
+      {isSplit && hasText ? numberEl : null}
     </div>
   );
 }
@@ -637,10 +638,14 @@ export default function PdfStoryPrint() {
 				}
 				@media print {
 					.no-print { display: none !important; }
-					body {
+					html, body {
+						height: auto !important;
 						background: white !important;
 						margin: 0 !important;
 					}
+					/* min-h-screen (100vh) wrappers can round up past the last page in
+					   some browsers/drivers and emit a trailing blank page. */
+					.min-h-screen { min-height: 0 !important; }
 					.print-sheet {
 						page-break-after: always;
 						break-after: page;
@@ -669,7 +674,7 @@ export default function PdfStoryPrint() {
 
 				.face-page-number {
 					position: absolute;
-					bottom: 0.2in;
+					bottom: 0.45in;
 					font-family: var(--reader-font);
 					font-variant-ligatures: none;
 					font-weight: 700;
@@ -683,7 +688,7 @@ export default function PdfStoryPrint() {
 				}
 				.face-page-number-left { left: 0.3in; }
 				.face-page-number-right { right: 0.3in; }
-				.face-page-number-small { font-size: 10pt; bottom: 0.12in; }
+				.face-page-number-small { font-size: 10pt; bottom: 0.3in; }
 				.face-page-number-small.face-page-number-left { left: 0.14in; }
 				.face-page-number-small.face-page-number-right { right: 0.14in; }
 
@@ -883,6 +888,13 @@ export default function PdfStoryPrint() {
 					justify-content: center;
 					width: 100%;
 					min-height: 0;
+					position: relative;
+				}
+				/* When the number is anchored to the image area (caption layout), a
+				   smaller inset is enough — the caption band below already keeps it
+				   away from the paper edge, and this keeps it off the caption text. */
+				.face-image-wrap .face-page-number {
+					bottom: 0.3in;
 				}
 				.face-image {
 					max-width: 100%;
@@ -1719,7 +1731,10 @@ export default function PdfStoryPrint() {
               />
             );
             return (
-              <div key={`reading-spread-${idx}`} className="relative mb-8">
+              <div
+                key={`reading-spread-${idx}`}
+                className="relative mb-8 print:mb-0"
+              >
                 <div className="booklet-sheet-label print:hidden">
                   Reading spread {idx + 1}
                 </div>
@@ -1860,7 +1875,7 @@ export default function PdfStoryPrint() {
               );
             };
             return (
-              <div key={`sheet-${idx}`} className="relative mb-8">
+              <div key={`sheet-${idx}`} className="relative mb-8 print:mb-0">
                 <div className="booklet-sheet-label print:hidden">
                   Sheet {sheet.sheetIndex + 1} — FRONT (outside)
                 </div>
