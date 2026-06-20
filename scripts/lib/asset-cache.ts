@@ -21,6 +21,52 @@ import OpenAI, { toFile } from "openai";
 
 const openai = new OpenAI();
 
+// When OPEN_ROUTER_API_KEY is set, images are generated through OpenRouter
+// instead of the OpenAI images API. OpenRouter has no /images endpoint, so
+// generation goes through chat completions with an image-output model that
+// accepts reference images as inputs.
+const OPENROUTER_API_KEY = process.env.OPEN_ROUTER_API_KEY;
+// openai/gpt-5.4-image-2 is GPT Image 2 (the model this series was built
+// with) exposed through OpenRouter's chat completions API.
+const OPENROUTER_IMAGE_MODEL =
+  process.env.OPENROUTER_IMAGE_MODEL ?? "openai/gpt-5.4-image-2";
+const openrouter = OPENROUTER_API_KEY
+  ? new OpenAI({
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: OPENROUTER_API_KEY,
+      // Image generations are slow and return large base64 payloads — give the
+      // socket plenty of time and let the SDK retry transient drops itself.
+      timeout: 5 * 60 * 1000,
+      maxRetries: 5,
+    })
+  : null;
+
+/** Retry transient network failures (socket drops, timeouts) with backoff. */
+async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 4): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      const cause =
+        err && typeof err === "object" && "cause" in err
+          ? String((err as { cause?: unknown }).cause)
+          : "";
+      const transient =
+        /terminated|ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed|aborted|Unexpected end of JSON input|Unexpected token|no image|503|502|429/i.test(
+          msg + " " + cause,
+        );
+      if (i === attempts || !transient) throw err;
+      const backoff = Math.min(30000, 2000 * 2 ** (i - 1));
+      console.warn(`  [retry] ${label} failed (${msg}); retrying in ${backoff}ms (${i}/${attempts})`);
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
+  throw lastErr;
+}
+
 const CACHE_ROOT = path.join(process.cwd(), "data", "character-cache");
 const STYLES_DIR = path.join(CACHE_ROOT, "styles");
 const CHARACTERS_DIR = path.join(CACHE_ROOT, "characters");
@@ -121,6 +167,84 @@ async function writeImageFromB64(outPath: string, b64: string) {
   await fs.writeFile(outPath, buf);
 }
 
+function aspectRatioForSize(size: ImageSize): string {
+  switch (size) {
+    case "1536x1024":
+      return "3:2";
+    case "1024x1536":
+      return "2:3";
+    default:
+      return "1:1";
+  }
+}
+
+async function loadImageDataUri(p: string) {
+  const buf = await fs.readFile(p);
+  const ext = path.extname(p).toLowerCase();
+  const type =
+    ext === ".jpg" || ext === ".jpeg"
+      ? "image/jpeg"
+      : ext === ".webp"
+        ? "image/webp"
+        : "image/png";
+  return `data:${type};base64,${buf.toString("base64")}`;
+}
+
+/**
+ * Generate an image via OpenRouter chat completions. Reference images (if
+ * any) are passed as image_url content parts; the model returns the image
+ * as a base64 data URI in message.images.
+ */
+async function generateViaOpenRouter(
+  prompt: string,
+  references: string[],
+  outPath: string,
+  size: ImageSize,
+) {
+  if (!openrouter) throw new Error("OpenRouter client not configured");
+  const aspect = aspectRatioForSize(size);
+  const content: Array<Record<string, unknown>> = [
+    {
+      type: "text",
+      text:
+        `${prompt}\n\nRender exactly one image in a ${aspect} aspect ratio.` +
+        (references.length
+          ? " Match the art style of the supplied reference images exactly: same palette, same line weight, same shading style. The supplied images are style and character references, not content to copy verbatim."
+          : ""),
+    },
+  ];
+  for (const ref of references) {
+    content.push({
+      type: "image_url",
+      image_url: { url: await loadImageDataUri(ref) },
+    });
+  }
+  const result = (await openrouter.chat.completions.create({
+    model: OPENROUTER_IMAGE_MODEL,
+    messages: [{ role: "user", content }],
+    modalities: ["image", "text"],
+    image_config: { aspect_ratio: aspect },
+  } as never)) as unknown as {
+    choices?: Array<{
+      message?: {
+        content?: string;
+        images?: Array<{ image_url?: { url?: string } }>;
+      };
+    }>;
+  };
+  const message = result.choices?.[0]?.message;
+  const url = message?.images?.[0]?.image_url?.url;
+  if (!url) {
+    const text = message?.content?.slice(0, 200);
+    throw new Error(
+      `OpenRouter returned no image${text ? ` (model said: ${text})` : ""}`,
+    );
+  }
+  const b64 = url.startsWith("data:") ? url.split(",", 2)[1] : null;
+  if (!b64) throw new Error(`OpenRouter image is not a data URI: ${url.slice(0, 80)}`);
+  await writeImageFromB64(outPath, b64);
+}
+
 async function generateFromScratch(
   prompt: string,
   outPath: string,
@@ -128,6 +252,12 @@ async function generateFromScratch(
   quality: ImageQuality,
   model: ImageModel = DEFAULT_IMAGE_MODEL,
 ) {
+  if (openrouter) {
+    await withRetry(`generate ${path.basename(outPath)}`, () =>
+      generateViaOpenRouter(prompt, [], outPath, size),
+    );
+    return;
+  }
   const result = await openai.images.generate({
     model,
     prompt,
@@ -148,6 +278,12 @@ async function generateFromReferences(
   quality: ImageQuality,
   model: ImageModel = DEFAULT_IMAGE_MODEL,
 ) {
+  if (openrouter) {
+    await withRetry(`generate ${path.basename(outPath)}`, () =>
+      generateViaOpenRouter(prompt, references, outPath, size),
+    );
+    return;
+  }
   const imageInputs = await Promise.all(references.map(loadImageFile));
   const result = await openai.images.edit({
     model,

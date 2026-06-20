@@ -1,9 +1,11 @@
 import path from "path";
 import fs from "fs-extra";
-import {
-  normalizeContentPath,
-  upsertContentFile,
-} from "#app/utils/content-store.server.ts";
+// Books are served from the filesystem under data/processed-pdfs/; the old
+// content-DB caching is a no-op now (the monorepo serves files directly).
+const normalizeContentPath = (p: string) => p;
+const upsertContentFile = async (_args: unknown) => {};
+void normalizeContentPath;
+void upsertContentFile;
 import {
   resolveStyle,
   resolveCharacter,
